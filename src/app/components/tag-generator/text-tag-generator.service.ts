@@ -241,48 +241,48 @@ export class TextTagGeneratorService {
     return results;
   }
 
-  /**
-   * Advanced feature: Calculate semantic similarity between words (basic implementation)
-   */
-  private calculateSemanticSimilarity(word1: string, word2: string): number {
-    // Simple character-based similarity (can be enhanced with more sophisticated methods)
-    const longer = word1.length > word2.length ? word1 : word2;
-    const shorter = word1.length > word2.length ? word2 : word1;
+  // /**
+  //  * Advanced feature: Calculate semantic similarity between words (basic implementation)
+  //  */
+  // private calculateSemanticSimilarity(word1: string, word2: string): number {
+  //   // Simple character-based similarity (can be enhanced with more sophisticated methods)
+  //   const longer = word1.length > word2.length ? word1 : word2;
+  //   const shorter = word1.length > word2.length ? word2 : word1;
     
-    if (longer.length === 0) return 1.0;
+  //   if (longer.length === 0) return 1.0;
     
-    const distance = this.levenshteinDistance(longer, shorter);
-    return (longer.length - distance) / longer.length;
-  }
+  //   const distance = this.levenshteinDistance(longer, shorter);
+  //   return (longer.length - distance) / longer.length;
+  // }
 
-  /**
-   * Calculate Levenshtein distance between two strings
-   */
-  private levenshteinDistance(str1: string, str2: string): number {
-    const matrix = [];
+  // /**
+  //  * Calculate Levenshtein distance between two strings
+  //  */
+  // private levenshteinDistance(str1: string, str2: string): number {
+  //   const matrix = [];
     
-    for (let i = 0; i <= str2.length; i++) {
-      matrix[i] = [i];
-    }
+  //   for (let i = 0; i <= str2.length; i++) {
+  //     matrix[i] = [i];
+  //   }
     
-    for (let j = 0; j <= str1.length; j++) {
-      matrix[0][j] = j;
-    }
+  //   for (let j = 0; j <= str1.length; j++) {
+  //     matrix[0][j] = j;
+  //   }
     
-    for (let i = 1; i <= str2.length; i++) {
-      for (let j = 1; j <= str1.length; j++) {
-        if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
-          matrix[i][j] = matrix[i - 1][j - 1];
-        } else {
-          matrix[i][j] = Math.min(
-            matrix[i - 1][j - 1] + 1,
-            matrix[i][j - 1] + 1,
-            matrix[i - 1][j] + 1
-          );
-        }
-      }
-    }
+  //   for (let i = 1; i <= str2.length; i++) {
+  //     for (let j = 1; j <= str1.length; j++) {
+  //       if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
+  //         matrix[i][j] = matrix[i - 1][j - 1];
+  //       } else {
+  //         matrix[i][j] = Math.min(
+  //           matrix[i - 1][j - 1] + 1,
+  //           matrix[i][j - 1] + 1,
+  //           matrix[i - 1][j] + 1
+  //         );
+  //       }
+  //     }
+  //   }
     
-    return matrix[str2.length][str1.length];
-  }
+  //   return matrix[str2.length][str1.length];
+  // }
 }
