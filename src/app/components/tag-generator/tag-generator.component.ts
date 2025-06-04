@@ -6,11 +6,12 @@ import {
   TagResult,
   GeneratorOptions,
 } from './text-tag-generator.service';
+import { FilterByTypePipe } from './filter-by-type.pipe';
 
 @Component({
   selector: 'app-tag-generator',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, FilterByTypePipe],
   templateUrl: './tag-generator.component.html',
   styleUrls: ['./tag-generator.component.scss'],
 })
@@ -27,7 +28,7 @@ export class TagGeneratorComponent {
   phraseGenerationMode: 'specific' | 'range' = 'range';
   selectedPhraseSizes: number[] = [2, 3]; // For specific sizes
   minPhraseSize = 2; // For range mode
-  maxPhraseSize = 4; // For range mode
+  maxPhraseSize = 5; // For range mode
   caseSensitive = false;
 
   // Results

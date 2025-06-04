@@ -39,6 +39,7 @@ export class TextTagGeneratorService {
 
   /**
    * Generate tags from paragraph text using statistical analysis
+   * Returns N words and N phrases (total of 2N tags) when a user asks for N tags
    */
   public generateTags(text: string, options: GeneratorOptions = {}): TagResult[] {
     const {
@@ -64,19 +65,46 @@ export class TextTagGeneratorService {
     // Calculate TF-IDF-like scores
     const wordScores = this.calculateWordScores(filteredWords, words.length);
     
-    // Generate n-grams if requested
-    let ngramScores: Map<string, number> = new Map();
-    if (includeNgrams) {
-      ngramScores = this.generateNgrams(words, ngramSizes, minNgramSize, maxNgramSize, minFrequency);
+    // Create word tag results
+    const wordResults: TagResult[] = [];
+    for (const [word, score] of wordScores) {
+      wordResults.push({
+        tag: word,
+        score: score,
+        frequency: wordFreq.get(word) || 0,
+        type: 'word'
+      });
     }
     
-    // Combine and rank results
-    const allCandidates = this.combineResults(wordScores, ngramScores, wordFreq);
-    
-    // Sort by score and return top results
-    return allCandidates
+    // Sort words by score and get top N
+    const topWords = wordResults
       .sort((a, b) => b.score - a.score)
       .slice(0, maxTags);
+    
+    // Generate n-grams if requested
+    let topPhrases: TagResult[] = [];
+    if (includeNgrams) {
+      const ngramScores = this.generateNgrams(words, ngramSizes, minNgramSize, maxNgramSize, minFrequency);
+      
+      // Create phrase tag results
+      const phraseResults: TagResult[] = [];
+      for (const [ngram, score] of ngramScores) {
+        phraseResults.push({
+          tag: ngram,
+          score: score,
+          frequency: 1, // N-grams don't have direct frequency mapping
+          type: 'phrase'
+        });
+      }
+      
+      // Sort phrases by score and get top N
+      topPhrases = phraseResults
+        .sort((a, b) => b.score - a.score)
+        .slice(0, maxTags);
+    }
+    
+    // Return N words and N phrases (2N total tags)
+    return [...topWords, ...topPhrases];
   }
 
   /**
@@ -232,6 +260,8 @@ export class TextTagGeneratorService {
 
   /**
    * Combine word scores and n-gram scores into final results
+   * Note: This method is kept for backwards compatibility but is no longer used
+   * in the main generateTags flow
    */
   private combineResults(
     wordScores: Map<string, number>,
