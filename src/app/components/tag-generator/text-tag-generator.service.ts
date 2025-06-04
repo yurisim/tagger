@@ -79,15 +79,26 @@ export class TextTagGeneratorService {
    * Preprocess text: tokenize, clean, and normalize
    */
   private preprocessText(text: string, caseSensitive: boolean): string[] {
-    // Convert to lowercase if not case sensitive
     let processedText = caseSensitive ? text : text.toLowerCase();
-    
-    // Remove punctuation and special characters, keep only letters and spaces
+
+    // Step 1: Remove possessive 's, ’s, s', and s’
+    // Handles cases like "Trump's", "Trump’s" -> "Trump"
+    // Handles cases like "students'", "students’" -> "students"
+    processedText = processedText.replace(/\b['’]s\b/g, ''); 
+    processedText = processedText.replace(/\bs['’]\b/g, '');
+
+    // Step 2: Replace all non-alphanumeric characters (except whitespace itself) with a single space.
+    // This helps separate words joined by punctuation, e.g., "cost-cutting" -> "cost cutting".
+    // It also removes any remaining apostrophes that are not part of the possessive patterns above (e.g. from contractions if not stop-worded).
     processedText = processedText.replace(/[^\w\s]/g, ' ');
     
-    // Split into words and filter
+    // Step 3: Normalize multiple spaces into single spaces and trim.
+    // This ensures clean tokens after punctuation removal.
+    processedText = processedText.replace(/\s+/g, ' ').trim();
+
+    // Step 4: Split into words and filter out stop words and any empty strings resulting from the process.
     return processedText
-      .split(/\s+/)
+      .split(/\s+/) // Use \s+ to handle any lingering multiple spaces robustly
       .filter(word => word.length > 0 && !this.stopWords.has(word));
   }
 
