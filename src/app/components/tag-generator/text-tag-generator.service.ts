@@ -103,8 +103,9 @@ export class TextTagGeneratorService {
         .slice(0, maxTags);
     }
     
-    // Return N words and N phrases (2N total tags)
-    return [...topWords, ...topPhrases];
+    // Combine and sort all tags by score
+    const allTags = [...topWords, ...topPhrases];
+    return allTags.sort((a, b) => b.score - a.score);
   }
 
   /**
@@ -222,6 +223,10 @@ export class TextTagGeneratorService {
   ): Map<string, number> {
     const ngrams = new Map<string, number>();
     
+    // First, get word scores to use for phrase scoring
+    const wordFrequencies = this.calculateWordFrequency(words);
+    const wordScores = this.calculateWordScores(wordFrequencies, words.length);
+    
     // Determine actual sizes to generate
     let sizesToGenerate: number[] = [];
     
@@ -249,92 +254,50 @@ export class TextTagGeneratorService {
     
     for (const [ngram, freq] of ngrams) {
       if (freq >= minFrequency) {
-        // Score n-grams lower than individual words but consider frequency
-        const score = (freq / maxNgramFreq) * 0.7; // Reduced weight for n-grams
-        scoredNgrams.set(ngram, score);
+        // Calculate phrase score based on multiple factors
+        const phraseWords = ngram.split(' ');
+        
+        // 1. Average score of component words
+        let componentScore = 0;
+        let validComponents = 0;
+        for (const word of phraseWords) {
+          if (wordScores.has(word)) {
+            componentScore += wordScores.get(word) || 0;
+            validComponents++;
+          }
+        }
+        const avgComponentScore = validComponents > 0 ? componentScore / validComponents : 0;
+        
+        // 2. Phrase frequency score (normalized)
+        const phraseFreqScore = freq / maxNgramFreq;
+        
+        // 3. Phrase cohesion bonus (phrases that appear frequently relative to their components)
+        let cohesionScore = 0;
+        if (validComponents > 0) {
+          // Calculate expected frequency if words were independent
+          let expectedFreq = words.length;
+          for (const word of phraseWords) {
+            const wordFreq = wordFrequencies.get(word) || 0;
+            expectedFreq = Math.min(expectedFreq, wordFreq);
+          }
+          // Cohesion is high when actual frequency approaches or exceeds expected
+          cohesionScore = expectedFreq > 0 ? Math.min(freq / expectedFreq, 1) : 0;
+        }
+        
+        // 4. Length penalty (longer phrases need stronger justification)
+        const lengthPenalty = 1 / Math.sqrt(phraseWords.length);
+        
+        // Combine scores with weights
+        // Give more weight to component scores to better relate to word scores
+        const finalScore = (avgComponentScore * 0.5) + 
+                          (phraseFreqScore * 0.2) + 
+                          (cohesionScore * 0.2) + 
+                          (lengthPenalty * 0.1);
+        
+        scoredNgrams.set(ngram, finalScore);
       }
     }
     
     return scoredNgrams;
   }
-
-  /**
-   * Combine word scores and n-gram scores into final results
-   * Note: This method is kept for backwards compatibility but is no longer used
-   * in the main generateTags flow
-   */
-  private combineResults(
-    wordScores: Map<string, number>,
-    ngramScores: Map<string, number>,
-    wordFreq: Map<string, number>
-  ): TagResult[] {
-    const results: TagResult[] = [];
-    
-    // Add word results
-    for (const [word, score] of wordScores) {
-      results.push({
-        tag: word,
-        score: score,
-        frequency: wordFreq.get(word) || 0,
-        type: 'word'
-      });
-    }
-    
-    // Add n-gram results
-    for (const [ngram, score] of ngramScores) {
-      results.push({
-        tag: ngram,
-        score: score,
-        frequency: 1, // N-grams don't have direct frequency mapping
-        type: 'phrase'
-      });
-    }
-    
-    return results;
-  }
-
-  // /**
-  //  * Advanced feature: Calculate semantic similarity between words (basic implementation)
-  //  */
-  // private calculateSemanticSimilarity(word1: string, word2: string): number {
-  //   // Simple character-based similarity (can be enhanced with more sophisticated methods)
-  //   const longer = word1.length > word2.length ? word1 : word2;
-  //   const shorter = word1.length > word2.length ? word2 : word1;
-    
-  //   if (longer.length === 0) return 1.0;
-    
-  //   const distance = this.levenshteinDistance(longer, shorter);
-  //   return (longer.length - distance) / longer.length;
-  // }
-
-  // /**
-  //  * Calculate Levenshtein distance between two strings
-  //  */
-  // private levenshteinDistance(str1: string, str2: string): number {
-  //   const matrix = [];
-    
-  //   for (let i = 0; i <= str2.length; i++) {
-  //     matrix[i] = [i];
-  //   }
-    
-  //   for (let j = 0; j <= str1.length; j++) {
-  //     matrix[0][j] = j;
-  //   }
-    
-  //   for (let i = 1; i <= str2.length; i++) {
-  //     for (let j = 1; j <= str1.length; j++) {
-  //       if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
-  //         matrix[i][j] = matrix[i - 1][j - 1];
-  //       } else {
-  //         matrix[i][j] = Math.min(
-  //           matrix[i - 1][j - 1] + 1,
-  //           matrix[i][j - 1] + 1,
-  //           matrix[i - 1][j] + 1
-  //         );
-  //       }
-  //     }
-  //   }
-    
-  //   return matrix[str2.length][str1.length];
-  // }
 }
