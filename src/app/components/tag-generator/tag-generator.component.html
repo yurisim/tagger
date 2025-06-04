@@ -192,7 +192,7 @@
       </div>
 
       <!-- Generated Tags (only visible when results exist) -->
-      <div *ngIf="generatedTags.length > 0" class="bg-white rounded-lg shadow-md p-6">
+      <div #generatedTagsSection *ngIf="generatedTags.length > 0" class="bg-white rounded-lg shadow-md p-6">
         <h2 class="text-xl font-semibold text-gray-800 mb-4">Generated Tags</h2>
         <div class="flex flex-wrap gap-2">
           <div
