@@ -36,6 +36,9 @@ export class TagGeneratorComponent {
   // Results
   generatedTags: TagResult[] = [];
   showDetailedResults = false;
+  
+  // UI State
+  isConfigExpanded = false;
 
   constructor(private tagGeneratorService: TextTagGeneratorService) {}
 
@@ -131,5 +134,9 @@ export class TagGeneratorComponent {
 
   loadSampleText(): void {
     this.inputText = '';
+  }
+
+  toggleConfigExpanded(): void {
+    this.isConfigExpanded = !this.isConfigExpanded;
   }
 }

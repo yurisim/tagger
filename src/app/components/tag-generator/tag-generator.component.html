@@ -39,7 +39,39 @@
 
       <!-- Options Section -->
       <div class="bg-white rounded-lg shadow-md p-6 mb-6">
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <!-- Expander Header -->
+        <div 
+          class="flex items-center justify-between cursor-pointer" 
+          (click)="toggleConfigExpanded()" 
+          (keydown.enter)="toggleConfigExpanded()" 
+          (keydown.space)="toggleConfigExpanded(); $event.preventDefault()" 
+          tabindex="0" 
+          role="button" 
+          [attr.aria-expanded]="isConfigExpanded" 
+          aria-controls="configOptions"
+        >
+          <h3 class="text-lg font-medium text-gray-800">Configuration Options</h3>
+          <div class="flex items-center text-indigo-600">
+            <span class="mr-2 text-sm">{{ isConfigExpanded ? 'Hide' : 'Show' }} Settings</span>
+            <svg 
+              class="w-5 h-5 transition-transform duration-200" 
+              [ngClass]="{'transform rotate-180': isConfigExpanded}"
+              fill="none" 
+              stroke="currentColor" 
+              viewBox="0 0 24 24"
+            >
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+            </svg>
+          </div>
+        </div>
+
+        <!-- Collapsible Content -->
+        <div 
+          id="configOptions" 
+          class="overflow-hidden transition-all duration-300" 
+          [ngClass]="{'h-0 mt-0 opacity-0': !isConfigExpanded, 'mt-4 opacity-100': isConfigExpanded}"
+        >
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
           <!-- Max Tags -->
           <div>
             <label for="maxTags" class="block text-sm font-medium text-gray-700 mb-2">Max Tags:</label>
@@ -184,8 +216,9 @@
             </select>
           </div>
         </div>
+        </div>
 
-        <!-- Generate Button -->
+        <!-- Generate Button - Always visible -->
         <div class="mt-6 text-center">
           <button
             (click)="generateTags()"
