@@ -12,7 +12,9 @@ export interface GeneratorOptions {
   minWordLength?: number;
   minFrequency?: number;
   includeNgrams?: boolean;
-  ngramSize?: number;
+  ngramSizes?: number[]; 
+  minNgramSize?: number; 
+  maxNgramSize?: number; 
   caseSensitive?: boolean;
 }
 
@@ -44,7 +46,9 @@ export class TextTagGeneratorService {
       minWordLength = 3,
       minFrequency = 1,
       includeNgrams = true,
-      ngramSize = 2,
+      ngramSizes = [2], // Default to single size if not provided
+      minNgramSize, // Alternative: min size for range
+      maxNgramSize, // Alternative: max size for range
       caseSensitive = false
     } = options;
 
@@ -63,7 +67,7 @@ export class TextTagGeneratorService {
     // Generate n-grams if requested
     let ngramScores: Map<string, number> = new Map();
     if (includeNgrams) {
-      ngramScores = this.generateNgrams(words, ngramSize, minFrequency);
+      ngramScores = this.generateNgrams(words, ngramSizes, minNgramSize, maxNgramSize, minFrequency);
     }
     
     // Combine and rank results
@@ -183,14 +187,32 @@ export class TextTagGeneratorService {
    */
   private generateNgrams(
     words: string[], 
-    ngramSize: number, 
-    minFrequency: number
+    ngramSizes: number[] = [2], 
+    minNgramSize?: number, 
+    maxNgramSize?: number, 
+    minFrequency = 1
   ): Map<string, number> {
     const ngrams = new Map<string, number>();
     
-    for (let i = 0; i <= words.length - ngramSize; i++) {
-      const ngram = words.slice(i, i + ngramSize).join(' ');
-      ngrams.set(ngram, (ngrams.get(ngram) || 0) + 1);
+    // Determine actual sizes to generate
+    let sizesToGenerate: number[] = [];
+    
+    if (minNgramSize !== undefined && maxNgramSize !== undefined) {
+      // Use range-based generation
+      for (let size = minNgramSize; size <= maxNgramSize; size++) {
+        sizesToGenerate.push(size);
+      }
+    } else {
+      // Use explicit sizes array
+      sizesToGenerate = ngramSizes;
+    }
+    
+    // Generate n-grams for each size
+    for (const size of sizesToGenerate) {
+      for (let i = 0; i <= words.length - size; i++) {
+        const ngram = words.slice(i, i + size).join(' ');
+        ngrams.set(ngram, (ngrams.get(ngram) || 0) + 1);
+      }
     }
     
     // Filter and score n-grams

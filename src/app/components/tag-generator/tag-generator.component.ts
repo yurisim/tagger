@@ -24,7 +24,10 @@ export class TagGeneratorComponent {
   minWordLength = 3;
   minFrequency = 1;
   includeNgrams = true;
-  ngramSize = 2;
+  phraseGenerationMode: 'specific' | 'range' = 'range';
+  selectedPhraseSizes: number[] = [2, 3]; // For specific sizes
+  minPhraseSize = 2; // For range mode
+  maxPhraseSize = 4; // For range mode
   caseSensitive = false;
 
   // Results
@@ -41,15 +44,36 @@ export class TagGeneratorComponent {
       minWordLength: this.minWordLength,
       minFrequency: this.minFrequency,
       includeNgrams: this.includeNgrams,
-      ngramSize: this.ngramSize,
       caseSensitive: this.caseSensitive,
     };
+
+    // Add phrase size options based on mode
+    if (this.phraseGenerationMode === 'specific') {
+      options.ngramSizes = this.selectedPhraseSizes;
+    } else {
+      options.minNgramSize = this.minPhraseSize;
+      options.maxNgramSize = this.maxPhraseSize;
+    }
 
     this.generatedTags = this.tagGeneratorService.generateTags(
       textToProcess,
       options
     );
     this.showDetailedResults = true;
+  }
+
+  togglePhraseSize(size: number): void {
+    const index = this.selectedPhraseSizes.indexOf(size);
+    if (index > -1) {
+      this.selectedPhraseSizes.splice(index, 1);
+    } else {
+      this.selectedPhraseSizes.push(size);
+    }
+    this.selectedPhraseSizes.sort((a, b) => a - b);
+  }
+
+  isPhraseSizeSelected(size: number): boolean {
+    return this.selectedPhraseSizes.includes(size);
   }
 
   getScorePercentage(score: number): string {
