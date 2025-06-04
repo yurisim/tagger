@@ -88,11 +88,11 @@ export class TextTagGeneratorService {
       
       // Create phrase tag results
       const phraseResults: TagResult[] = [];
-      for (const [ngram, score] of ngramScores) {
+      for (const [ngram, { score, frequency }] of ngramScores) {
         phraseResults.push({
           tag: ngram,
           score: score,
-          frequency: 1, // N-grams don't have direct frequency mapping
+          frequency: frequency, // Use actual frequency
           type: 'phrase'
         });
       }
@@ -223,7 +223,7 @@ export class TextTagGeneratorService {
     minNgramSize?: number, 
     maxNgramSize?: number, 
     minFrequency = 1
-  ): Map<string, number> {
+  ): Map<string, { score: number; frequency: number }> {
     const ngrams = new Map<string, number>();
     
     // First, get word scores to use for phrase scoring
@@ -252,7 +252,7 @@ export class TextTagGeneratorService {
     }
     
     // Filter and score n-grams
-    const scoredNgrams = new Map<string, number>();
+    const scoredNgrams = new Map<string, { score: number; frequency: number }>();
     const maxNgramFreq = Math.max(...ngrams.values());
     
     for (const [ngram, freq] of ngrams) {
@@ -271,8 +271,11 @@ export class TextTagGeneratorService {
         }
         const avgComponentScore = validComponents > 0 ? componentScore / validComponents : 0;
         
-        // 2. Phrase frequency score (normalized)
-        const phraseFreqScore = freq / maxNgramFreq;
+        // 2. Phrase frequency score (use logarithmic scaling to reduce impact of outliers)
+        // This prevents one very frequent phrase from making all others score too low
+        const logFreq = Math.log(freq + 1);
+        const maxLogFreq = Math.log(maxNgramFreq + 1);
+        const phraseFreqScore = logFreq / maxLogFreq;
         
         // 3. Phrase cohesion bonus (phrases that appear frequently relative to their components)
         let cohesionScore = 0;
@@ -291,13 +294,13 @@ export class TextTagGeneratorService {
         const lengthPenalty = 1 / Math.sqrt(phraseWords.length);
         
         // Combine scores with weights
-        // Give more weight to component scores to better relate to word scores
-        const finalScore = (avgComponentScore * 0.5) + 
-                          (phraseFreqScore * 0.2) + 
+        // Adjusted weights to better balance frequency and component scores
+        const finalScore = (avgComponentScore * 0.4) + 
+                          (phraseFreqScore * 0.3) + 
                           (cohesionScore * 0.2) + 
                           (lengthPenalty * 0.1);
         
-        scoredNgrams.set(ngram, finalScore);
+        scoredNgrams.set(ngram, { score: finalScore, frequency: freq });
       }
     }
     
