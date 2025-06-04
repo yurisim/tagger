@@ -128,4 +128,8 @@ export class TagGeneratorComponent {
     // Format score to 4 decimal places
     return score.toFixed(4);
   }
+
+  loadSampleText(): void {
+    this.inputText = '';
+  }
 }
