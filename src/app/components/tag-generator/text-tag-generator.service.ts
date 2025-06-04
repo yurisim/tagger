@@ -1,5 +1,9 @@
 import { Injectable } from '@angular/core';
 
+// ===========================
+// INTERFACES AND TYPES
+// ===========================
+
 export interface TagResult {
   tag: string;
   score: number;
@@ -18,14 +22,47 @@ export interface GeneratorOptions {
   caseSensitive?: boolean;
 }
 
+// ===========================
+// SERVICE IMPLEMENTATION
+// ===========================
+
 @Injectable({
   providedIn: 'root'
 })
 export class TextTagGeneratorService {
-  private stopWords: Set<string>;
+  // ===========================
+  // CONSTANTS
+  // ===========================
+  
+  // Scoring weights for different factors
+  private readonly SCORING_WEIGHTS = {
+    word: {
+      termFrequency: 0.4,
+      lengthBonus: 0.3,
+      frequencySignificance: 0.3
+    },
+    phrase: {
+      componentScore: 0.4,
+      frequencyScore: 0.3,
+      cohesionScore: 0.2,
+      lengthPenalty: 0.1
+    }
+  };
+  
+  // Optimal relative frequency for scoring (3% of total words)
+  private readonly OPTIMAL_RELATIVE_FREQUENCY = 0.03;
+  
+  // Frequency significance decay factor
+  private readonly FREQUENCY_DECAY_FACTOR = 50;
+  
+  // Common English stop words
+  private readonly stopWords: Set<string>;
+  
+  // ===========================
+  // CONSTRUCTOR
+  // ===========================
   
   constructor() {
-    // Common English stop words
     this.stopWords = new Set([
       'a', 'an', 'and', 'are', 'as', 'at', 'be', 'by', 'for', 'from',
       'has', 'he', 'in', 'is', 'it', 'its', 'of', 'on', 'that', 'the',
@@ -37,9 +74,17 @@ export class TextTagGeneratorService {
     ]);
   }
 
+  // ===========================
+  // PUBLIC API
+  // ===========================
+
   /**
    * Generate tags from paragraph text using statistical analysis
    * Returns N words and N phrases (total of 2N tags) when a user asks for N tags
+   * 
+   * @param text - The input text to analyze
+   * @param options - Configuration options for tag generation
+   * @returns Array of TagResult objects sorted by relevance score
    */
   public generateTags(text: string, options: GeneratorOptions = {}): TagResult[] {
     const {
@@ -47,25 +92,100 @@ export class TextTagGeneratorService {
       minWordLength = 3,
       minFrequency = 1,
       includeNgrams = true,
-      ngramSizes = [2], // Default to single size if not provided
-      minNgramSize, // Alternative: min size for range
-      maxNgramSize, // Alternative: max size for range
+      ngramSizes = [2],
+      minNgramSize,
+      maxNgramSize,
       caseSensitive = false
     } = options;
 
-    // Preprocess text
+    // Step 1: Preprocess and tokenize text
     const words = this.preprocessText(text, caseSensitive);
     
-    // Get word frequencies
+    // Step 2: Generate word tags
+    const wordResults = this.generateWordTags(words, minWordLength, minFrequency, maxTags);
+    
+    // Step 3: Generate phrase tags if requested
+    let phraseResults: TagResult[] = [];
+    if (includeNgrams) {
+      phraseResults = this.generatePhraseTags(
+        words, 
+        ngramSizes, 
+        minNgramSize, 
+        maxNgramSize, 
+        minFrequency, 
+        maxTags
+      );
+    }
+    
+    // Step 4: Combine and filter results
+    const allTags = [...wordResults, ...phraseResults];
+    const sortedTags = allTags.sort((a, b) => b.score - a.score);
+    
+    return this.filterComponentWords(sortedTags);
+  }
+
+  // ===========================
+  // TEXT PREPROCESSING
+  // ===========================
+
+  /**
+   * Preprocess text: tokenize, clean, and normalize
+   * 
+   * @param text - Raw input text
+   * @param caseSensitive - Whether to preserve case
+   * @returns Array of cleaned word tokens
+   */
+  private preprocessText(text: string, caseSensitive: boolean): string[] {
+    let processedText = caseSensitive ? text : text.toLowerCase();
+
+    // Remove possessive forms comprehensively
+    processedText = processedText.replace(/(['']s|s[''])\b/g, '');
+    
+    // Replace non-alphanumeric characters with spaces
+    processedText = processedText.replace(/[^\w\s]/g, ' ');
+    
+    // Normalize whitespace
+    processedText = processedText.replace(/\s+/g, ' ').trim();
+
+    // Split and filter
+    return processedText
+      .split(/\s+/)
+      .filter(word => 
+        word.length > 1 &&
+        !this.stopWords.has(word) &&
+        !/^[''"`\-_]+$/.test(word)
+      );
+  }
+
+  // ===========================
+  // WORD TAG GENERATION
+  // ===========================
+
+  /**
+   * Generate word-based tags with scoring
+   * 
+   * @param words - Preprocessed word tokens
+   * @param minWordLength - Minimum word length to consider
+   * @param minFrequency - Minimum frequency threshold
+   * @param maxTags - Maximum number of tags to return
+   * @returns Array of word tag results
+   */
+  private generateWordTags(
+    words: string[], 
+    minWordLength: number, 
+    minFrequency: number,
+    maxTags: number
+  ): TagResult[] {
+    // Calculate frequencies
     const wordFreq = this.calculateWordFrequency(words);
     
-    // Filter words by criteria
+    // Filter by criteria
     const filteredWords = this.filterWords(wordFreq, minWordLength, minFrequency);
     
-    // Calculate TF-IDF-like scores
+    // Calculate scores
     const wordScores = this.calculateWordScores(filteredWords, words.length);
     
-    // Create word tag results
+    // Create results
     const wordResults: TagResult[] = [];
     for (const [word, score] of wordScores) {
       wordResults.push({
@@ -76,70 +196,17 @@ export class TextTagGeneratorService {
       });
     }
     
-    // Sort words by score and get top N
-    const topWords = wordResults
+    // Return top N
+    return wordResults
       .sort((a, b) => b.score - a.score)
       .slice(0, maxTags);
-    
-    // Generate n-grams if requested
-    let topPhrases: TagResult[] = [];
-    if (includeNgrams) {
-      const ngramScores = this.generateNgrams(words, ngramSizes, minNgramSize, maxNgramSize, minFrequency);
-      
-      // Create phrase tag results
-      const phraseResults: TagResult[] = [];
-      for (const [ngram, { score, frequency }] of ngramScores) {
-        phraseResults.push({
-          tag: ngram,
-          score: score,
-          frequency: frequency, // Use actual frequency
-          type: 'phrase'
-        });
-      }
-      
-      // Sort phrases by score and get top N
-      topPhrases = phraseResults
-        .sort((a, b) => b.score - a.score)
-        .slice(0, maxTags);
-    }
-    
-    // Combine and sort all tags by score
-    const allTags = [...topWords, ...topPhrases];
-    const sortedTags = allTags.sort((a, b) => b.score - a.score);
-    
-    // Filter out component words that appear in higher-scoring phrases
-    return this.filterComponentWords(sortedTags);
-  }
-
-  /**
-   * Preprocess text: tokenize, clean, and normalize
-   */
-  private preprocessText(text: string, caseSensitive: boolean): string[] {
-    let processedText = caseSensitive ? text : text.toLowerCase();
-
-    // Step 1: Remove possessive forms comprehensively
-    // Handle all variations: "Trump's", "Trump's", "students'", "students'"
-    processedText = processedText.replace(/(['']s|s[''])\b/g, ''); // Remove 's, 's, s', s'
-    
-    // Step 2: Replace all non-alphanumeric characters (except whitespace) with a single space
-    // This helps separate words joined by punctuation, e.g., "cost-cutting" -> "cost cutting"
-    processedText = processedText.replace(/[^\w\s]/g, ' ');
-    
-    // Step 3: Normalize multiple spaces into single spaces and trim
-    processedText = processedText.replace(/\s+/g, ' ').trim();
-
-    // Step 4: Split into words and filter out stop words, empty strings, and single characters
-    return processedText
-      .split(/\s+/)
-      .filter(word => 
-        word.length > 1 && // Filter out single characters like 's'
-        !this.stopWords.has(word) &&
-        !/^[''"`\-_]+$/.test(word) // Filter out tokens that are only punctuation
-      );
   }
 
   /**
    * Calculate frequency of each word
+   * 
+   * @param words - Array of word tokens
+   * @returns Map of word to frequency count
    */
   private calculateWordFrequency(words: string[]): Map<string, number> {
     const frequency = new Map<string, number>();
@@ -153,6 +220,11 @@ export class TextTagGeneratorService {
 
   /**
    * Filter words based on length and frequency criteria
+   * 
+   * @param wordFreq - Word frequency map
+   * @param minLength - Minimum word length
+   * @param minFrequency - Minimum frequency
+   * @returns Filtered word frequency map
    */
   private filterWords(
     wordFreq: Map<string, number>, 
@@ -172,6 +244,10 @@ export class TextTagGeneratorService {
 
   /**
    * Calculate importance scores using statistical measures
+   * 
+   * @param wordFreq - Filtered word frequencies
+   * @param totalWords - Total number of words in document
+   * @returns Map of word to calculated score
    */
   private calculateWordScores(
     wordFreq: Map<string, number>, 
@@ -181,7 +257,6 @@ export class TextTagGeneratorService {
     const maxFreq = Math.max(...wordFreq.values());
     
     for (const [word, freq] of wordFreq) {
-      // Combine multiple scoring factors:
       // 1. Normalized frequency (TF)
       const tf = freq / maxFreq;
       
@@ -192,7 +267,10 @@ export class TextTagGeneratorService {
       const freqSignificance = this.calculateFrequencySignificance(freq, totalWords);
       
       // Combine scores with weights
-      const finalScore = (tf * 0.4) + (lengthBonus * 0.3) + (freqSignificance * 0.3);
+      const finalScore = 
+        (tf * this.SCORING_WEIGHTS.word.termFrequency) + 
+        (lengthBonus * this.SCORING_WEIGHTS.word.lengthBonus) + 
+        (freqSignificance * this.SCORING_WEIGHTS.word.frequencySignificance);
       
       scores.set(word, finalScore);
     }
@@ -202,20 +280,76 @@ export class TextTagGeneratorService {
 
   /**
    * Calculate how significant a frequency is (not too common, not too rare)
+   * Uses a bell curve-like function where moderate frequencies score higher
+   * 
+   * @param frequency - Word frequency
+   * @param totalWords - Total words in document
+   * @returns Significance score between 0 and 1
    */
   private calculateFrequencySignificance(frequency: number, totalWords: number): number {
     const relativeFreq = frequency / totalWords;
+    const distance = Math.abs(relativeFreq - this.OPTIMAL_RELATIVE_FREQUENCY);
     
-    // Use a bell curve-like function where moderate frequencies score higher
-    // Optimal frequency is around 1-5% of total words
-    const optimalFreq = 0.03;
-    const distance = Math.abs(relativeFreq - optimalFreq);
+    return Math.exp(-distance * this.FREQUENCY_DECAY_FACTOR);
+  }
+
+  // ===========================
+  // PHRASE TAG GENERATION
+  // ===========================
+
+  /**
+   * Generate phrase-based tags (n-grams) with scoring
+   * 
+   * @param words - Preprocessed word tokens
+   * @param ngramSizes - Explicit n-gram sizes to generate
+   * @param minNgramSize - Minimum n-gram size (for range-based generation)
+   * @param maxNgramSize - Maximum n-gram size (for range-based generation)
+   * @param minFrequency - Minimum frequency threshold
+   * @param maxTags - Maximum number of tags to return
+   * @returns Array of phrase tag results
+   */
+  private generatePhraseTags(
+    words: string[],
+    ngramSizes: number[],
+    minNgramSize: number | undefined,
+    maxNgramSize: number | undefined,
+    minFrequency: number,
+    maxTags: number
+  ): TagResult[] {
+    const ngramScores = this.generateNgrams(
+      words, 
+      ngramSizes, 
+      minNgramSize, 
+      maxNgramSize, 
+      minFrequency
+    );
     
-    return Math.exp(-distance * 50); // Exponential decay from optimal point
+    // Create phrase tag results
+    const phraseResults: TagResult[] = [];
+    for (const [ngram, { score, frequency }] of ngramScores) {
+      phraseResults.push({
+        tag: ngram,
+        score: score,
+        frequency: frequency,
+        type: 'phrase'
+      });
+    }
+    
+    // Return top N
+    return phraseResults
+      .sort((a, b) => b.score - a.score)
+      .slice(0, maxTags);
   }
 
   /**
    * Generate n-grams and score them
+   * 
+   * @param words - Word tokens
+   * @param ngramSizes - Explicit sizes to generate
+   * @param minNgramSize - Minimum size for range-based generation
+   * @param maxNgramSize - Maximum size for range-based generation
+   * @param minFrequency - Minimum frequency threshold
+   * @returns Map of n-gram to score and frequency
    */
   private generateNgrams(
     words: string[], 
@@ -224,83 +358,108 @@ export class TextTagGeneratorService {
     maxNgramSize?: number, 
     minFrequency = 1
   ): Map<string, { score: number; frequency: number }> {
-    const ngrams = new Map<string, number>();
-    
-    // First, get word scores to use for phrase scoring
+    // Get word scores for phrase scoring
     const wordFrequencies = this.calculateWordFrequency(words);
     const wordScores = this.calculateWordScores(wordFrequencies, words.length);
     
-    // Determine actual sizes to generate
-    let sizesToGenerate: number[] = [];
+    // Determine sizes to generate
+    const sizesToGenerate = this.determinNgramSizes(
+      ngramSizes, 
+      minNgramSize, 
+      maxNgramSize
+    );
     
+    // Generate n-grams
+    const ngrams = this.extractNgrams(words, sizesToGenerate);
+    
+    // Score n-grams
+    return this.scoreNgrams(
+      ngrams, 
+      wordScores, 
+      wordFrequencies, 
+      words.length, 
+      minFrequency
+    );
+  }
+
+  /**
+   * Determine which n-gram sizes to generate
+   * 
+   * @param ngramSizes - Explicit sizes
+   * @param minNgramSize - Minimum size for range
+   * @param maxNgramSize - Maximum size for range
+   * @returns Array of sizes to generate
+   */
+  private determinNgramSizes(
+    ngramSizes: number[],
+    minNgramSize?: number,
+    maxNgramSize?: number
+  ): number[] {
     if (minNgramSize !== undefined && maxNgramSize !== undefined) {
       // Use range-based generation
+      const sizes: number[] = [];
       for (let size = minNgramSize; size <= maxNgramSize; size++) {
-        sizesToGenerate.push(size);
+        sizes.push(size);
       }
-    } else {
-      // Use explicit sizes array
-      sizesToGenerate = ngramSizes;
+      return sizes;
     }
     
-    // Generate n-grams for each size
-    for (const size of sizesToGenerate) {
+    // Use explicit sizes array
+    return ngramSizes;
+  }
+
+  /**
+   * Extract n-grams from word array
+   * 
+   * @param words - Word tokens
+   * @param sizes - N-gram sizes to extract
+   * @returns Map of n-gram to frequency
+   */
+  private extractNgrams(words: string[], sizes: number[]): Map<string, number> {
+    const ngrams = new Map<string, number>();
+    
+    for (const size of sizes) {
       for (let i = 0; i <= words.length - size; i++) {
         const ngram = words.slice(i, i + size).join(' ');
         ngrams.set(ngram, (ngrams.get(ngram) || 0) + 1);
       }
     }
     
-    // Filter and score n-grams
+    return ngrams;
+  }
+
+  /**
+   * Score n-grams based on multiple factors
+   * 
+   * @param ngrams - N-gram frequency map
+   * @param wordScores - Individual word scores
+   * @param wordFrequencies - Individual word frequencies
+   * @param totalWords - Total words in document
+   * @param minFrequency - Minimum frequency threshold
+   * @returns Map of n-gram to score and frequency
+   */
+  private scoreNgrams(
+    ngrams: Map<string, number>,
+    wordScores: Map<string, number>,
+    wordFrequencies: Map<string, number>,
+    totalWords: number,
+    minFrequency: number
+  ): Map<string, { score: number; frequency: number }> {
     const scoredNgrams = new Map<string, { score: number; frequency: number }>();
     const maxNgramFreq = Math.max(...ngrams.values());
     
     for (const [ngram, freq] of ngrams) {
       if (freq >= minFrequency) {
-        // Calculate phrase score based on multiple factors
-        const phraseWords = ngram.split(' ');
+        const score = this.calculatePhraseScore(
+          ngram,
+          freq,
+          maxNgramFreq,
+          wordScores,
+          wordFrequencies,
+          totalWords
+        );
         
-        // 1. Average score of component words
-        let componentScore = 0;
-        let validComponents = 0;
-        for (const word of phraseWords) {
-          if (wordScores.has(word)) {
-            componentScore += wordScores.get(word) || 0;
-            validComponents++;
-          }
-        }
-        const avgComponentScore = validComponents > 0 ? componentScore / validComponents : 0;
-        
-        // 2. Phrase frequency score (use logarithmic scaling to reduce impact of outliers)
-        // This prevents one very frequent phrase from making all others score too low
-        const logFreq = Math.log(freq + 1);
-        const maxLogFreq = Math.log(maxNgramFreq + 1);
-        const phraseFreqScore = logFreq / maxLogFreq;
-        
-        // 3. Phrase cohesion bonus (phrases that appear frequently relative to their components)
-        let cohesionScore = 0;
-        if (validComponents > 0) {
-          // Calculate expected frequency if words were independent
-          let expectedFreq = words.length;
-          for (const word of phraseWords) {
-            const wordFreq = wordFrequencies.get(word) || 0;
-            expectedFreq = Math.min(expectedFreq, wordFreq);
-          }
-          // Cohesion is high when actual frequency approaches or exceeds expected
-          cohesionScore = expectedFreq > 0 ? Math.min(freq / expectedFreq, 1) : 0;
-        }
-        
-        // 4. Length penalty (longer phrases need stronger justification)
-        const lengthPenalty = 1 / Math.sqrt(phraseWords.length);
-        
-        // Combine scores with weights
-        // Adjusted weights to better balance frequency and component scores
-        const finalScore = (avgComponentScore * 0.4) + 
-                          (phraseFreqScore * 0.3) + 
-                          (cohesionScore * 0.2) + 
-                          (lengthPenalty * 0.1);
-        
-        scoredNgrams.set(ngram, { score: finalScore, frequency: freq });
+        scoredNgrams.set(ngram, { score, frequency: freq });
       }
     }
     
@@ -308,67 +467,210 @@ export class TextTagGeneratorService {
   }
 
   /**
+   * Calculate comprehensive score for a phrase
+   * 
+   * @param phrase - The phrase to score
+   * @param phraseFreq - Frequency of the phrase
+   * @param maxPhraseFreq - Maximum phrase frequency in corpus
+   * @param wordScores - Individual word scores
+   * @param wordFrequencies - Individual word frequencies
+   * @param totalWords - Total words in document
+   * @returns Calculated phrase score
+   */
+  private calculatePhraseScore(
+    phrase: string,
+    phraseFreq: number,
+    maxPhraseFreq: number,
+    wordScores: Map<string, number>,
+    wordFrequencies: Map<string, number>,
+    totalWords: number
+  ): number {
+    const phraseWords = phrase.split(' ');
+    
+    // 1. Average score of component words
+    const avgComponentScore = this.calculateAverageComponentScore(phraseWords, wordScores);
+    
+    // 2. Phrase frequency score (logarithmic scaling)
+    const logFreq = Math.log(phraseFreq + 1);
+    const maxLogFreq = Math.log(maxPhraseFreq + 1);
+    const phraseFreqScore = logFreq / maxLogFreq;
+    
+    // 3. Phrase cohesion bonus
+    const cohesionScore = this.calculateCohesionScore(
+      phraseWords, 
+      phraseFreq, 
+      wordFrequencies, 
+      totalWords
+    );
+    
+    // 4. Length penalty
+    const lengthPenalty = 1 / Math.sqrt(phraseWords.length);
+    
+    // Combine scores with weights
+    return (avgComponentScore * this.SCORING_WEIGHTS.phrase.componentScore) + 
+           (phraseFreqScore * this.SCORING_WEIGHTS.phrase.frequencyScore) + 
+           (cohesionScore * this.SCORING_WEIGHTS.phrase.cohesionScore) + 
+           (lengthPenalty * this.SCORING_WEIGHTS.phrase.lengthPenalty);
+  }
+
+  /**
+   * Calculate average score of component words in a phrase
+   * 
+   * @param phraseWords - Words in the phrase
+   * @param wordScores - Individual word scores
+   * @returns Average component score
+   */
+  private calculateAverageComponentScore(
+    phraseWords: string[], 
+    wordScores: Map<string, number>
+  ): number {
+    let componentScore = 0;
+    let validComponents = 0;
+    
+    for (const word of phraseWords) {
+      if (wordScores.has(word)) {
+        componentScore += wordScores.get(word) || 0;
+        validComponents++;
+      }
+    }
+    
+    return validComponents > 0 ? componentScore / validComponents : 0;
+  }
+
+  /**
+   * Calculate cohesion score for a phrase
+   * Measures how often words appear together vs independently
+   * 
+   * @param phraseWords - Words in the phrase
+   * @param phraseFreq - Frequency of the phrase
+   * @param wordFrequencies - Individual word frequencies
+   * @param totalWords - Total words in document
+   * @returns Cohesion score between 0 and 1
+   */
+  private calculateCohesionScore(
+    phraseWords: string[],
+    phraseFreq: number,
+    wordFrequencies: Map<string, number>,
+    totalWords: number
+  ): number {
+    // Calculate expected frequency if words were independent
+    let expectedFreq = totalWords;
+    for (const word of phraseWords) {
+      const wordFreq = wordFrequencies.get(word) || 0;
+      expectedFreq = Math.min(expectedFreq, wordFreq);
+    }
+    
+    // Cohesion is high when actual frequency approaches or exceeds expected
+    return expectedFreq > 0 ? Math.min(phraseFreq / expectedFreq, 1) : 0;
+  }
+
+  // ===========================
+  // POST-PROCESSING
+  // ===========================
+
+  /**
    * Filter out individual words that are components of higher-scoring phrases
    * and longer phrases that contain shorter, higher-scoring phrases
+   * 
+   * @param tags - All generated tags sorted by score
+   * @returns Filtered tags without redundant components
    */
   private filterComponentWords(tags: TagResult[]): TagResult[] {
     const filteredTags: TagResult[] = [];
     const componentWordsToRemove = new Set<string>();
     const phrasesToRemove = new Set<string>();
     
-    // Sort tags by score (highest first) to process higher-scoring items first
+    // Sort tags by score (highest first)
     const sortedTags = [...tags].sort((a, b) => b.score - a.score);
     
-    // First pass: identify phrases to keep and their components
-    const keptPhrases = new Set<string>();
-    for (const tag of sortedTags) {
-      if (tag.type === 'phrase' && !phrasesToRemove.has(tag.tag)) {
-        keptPhrases.add(tag.tag);
-        
-        // Mark component words for removal
-        const words = tag.tag.split(' ');
-        words.forEach(word => componentWordsToRemove.add(word));
-        
-        // Check if this phrase should exclude other phrases
-        for (const otherTag of sortedTags) {
-          if (otherTag.type === 'phrase' && 
-              otherTag.tag !== tag.tag && 
-              otherTag.score < tag.score) {
-            
-            // Check if the other phrase contains this phrase
-            const otherWords = otherTag.tag.split(' ');
-            const thisWords = tag.tag.split(' ');
-            
-            // Check if thisWords appears as a subsequence in otherWords
-            for (let i = 0; i <= otherWords.length - thisWords.length; i++) {
-              let matches = true;
-              for (let j = 0; j < thisWords.length; j++) {
-                if (otherWords[i + j] !== thisWords[j]) {
-                  matches = false;
-                  break;
-                }
-              }
-              if (matches) {
-                phrasesToRemove.add(otherTag.tag);
-                break;
-              }
-            }
-          }
-        }
-      }
-    }
+    // Process phrases first to identify components and overlaps
+    this.identifyRedundantTags(sortedTags, componentWordsToRemove, phrasesToRemove);
     
-    // Second pass: filter tags
+    // Filter final results
     for (const tag of sortedTags) {
       if (tag.type === 'phrase' && !phrasesToRemove.has(tag.tag)) {
-        // Include phrases that weren't marked for removal
         filteredTags.push(tag);
       } else if (tag.type === 'word' && !componentWordsToRemove.has(tag.tag)) {
-        // Only include words that are not components of any kept phrase
         filteredTags.push(tag);
       }
     }
     
     return filteredTags;
+  }
+
+  /**
+   * Identify redundant tags (component words and overlapping phrases)
+   * 
+   * @param sortedTags - Tags sorted by score
+   * @param componentWordsToRemove - Set to populate with component words
+   * @param phrasesToRemove - Set to populate with redundant phrases
+   */
+  private identifyRedundantTags(
+    sortedTags: TagResult[],
+    componentWordsToRemove: Set<string>,
+    phrasesToRemove: Set<string>
+  ): void {
+    for (const tag of sortedTags) {
+      if (tag.type === 'phrase' && !phrasesToRemove.has(tag.tag)) {
+        // Mark component words for removal
+        const words = tag.tag.split(' ');
+        words.forEach(word => componentWordsToRemove.add(word));
+        
+        // Check for overlapping phrases
+        this.checkPhraseOverlaps(tag, sortedTags, phrasesToRemove);
+      }
+    }
+  }
+
+  /**
+   * Check if a phrase overlaps with other lower-scoring phrases
+   * 
+   * @param phrase - The phrase to check
+   * @param allTags - All tags to check against
+   * @param phrasesToRemove - Set to populate with overlapping phrases
+   */
+  private checkPhraseOverlaps(
+    phrase: TagResult,
+    allTags: TagResult[],
+    phrasesToRemove: Set<string>
+  ): void {
+    const phraseWords = phrase.tag.split(' ');
+    
+    for (const otherTag of allTags) {
+      if (otherTag.type === 'phrase' && 
+          otherTag.tag !== phrase.tag && 
+          otherTag.score < phrase.score) {
+        
+        const otherWords = otherTag.tag.split(' ');
+        
+        // Check if phrase appears as a subsequence in other phrase
+        if (this.isSubsequence(phraseWords, otherWords)) {
+          phrasesToRemove.add(otherTag.tag);
+        }
+      }
+    }
+  }
+
+  /**
+   * Check if one word array is a subsequence of another
+   * 
+   * @param needle - Array to search for
+   * @param haystack - Array to search in
+   * @returns True if needle is found as subsequence in haystack
+   */
+  private isSubsequence(needle: string[], haystack: string[]): boolean {
+    for (let i = 0; i <= haystack.length - needle.length; i++) {
+      let matches = true;
+      for (let j = 0; j < needle.length; j++) {
+        if (haystack[i + j] !== needle[j]) {
+          matches = false;
+          break;
+        }
+      }
+      if (matches) {
+        return true;
+      }
+    }
+    return false;
   }
 }
