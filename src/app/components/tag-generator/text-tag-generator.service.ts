@@ -606,16 +606,35 @@ export class TextTagGeneratorService {
     // Process phrases first to identify components and overlaps
     this.identifyRedundantTags(sortedTags, componentWordsToRemove, phrasesToRemove);
     
-    // Filter final results
+    // Collect remaining phrase tags
+    const remainingPhraseTags: TagResult[] = [];
     for (const tag of sortedTags) {
       if (tag.type === 'phrase' && !phrasesToRemove.has(tag.tag)) {
-        filteredTags.push(tag);
-      } else if (tag.type === 'word' && !componentWordsToRemove.has(tag.tag)) {
+        remainingPhraseTags.push(tag);
+      }
+    }
+    
+    // Consolidate overlapping phrases
+    const consolidatedPhraseTags = this.consolidateOverlappingPhrases(remainingPhraseTags);
+    
+    // Filter final results
+    // First add consolidated phrases
+    for (const tag of consolidatedPhraseTags) {
+      filteredTags.push(tag);
+      // Add component words to removal set
+      const words = tag.tag.split(' ');
+      words.forEach(word => componentWordsToRemove.add(word));
+    }
+    
+    // Then add non-component words
+    for (const tag of sortedTags) {
+      if (tag.type === 'word' && !componentWordsToRemove.has(tag.tag)) {
         filteredTags.push(tag);
       }
     }
     
-    return filteredTags;
+    // Sort final results by score
+    return filteredTags.sort((a, b) => b.score - a.score);
   }
 
   /**
@@ -692,5 +711,307 @@ export class TextTagGeneratorService {
       }
     }
     return false;
+  }
+
+  /**
+   * Consolidate phrases with significant word overlap into more comprehensive phrases
+   * 
+   * @param phraseTags - Phrase tags to consolidate
+   * @returns Consolidated phrase tags
+   */
+  private consolidateOverlappingPhrases(phraseTags: TagResult[]): TagResult[] {
+    if (phraseTags.length <= 1) return phraseTags;
+    
+    // Group phrases by shared words
+    const phraseGroups = new Map<string, TagResult[]>();
+    
+    // First, identify overlapping phrase groups by shared words
+    for (const tag of phraseTags) {
+      const words = tag.tag.split(' ');
+      for (const word of words) {
+        if (!phraseGroups.has(word)) {
+          phraseGroups.set(word, []);
+        }
+        const group = phraseGroups.get(word);
+        if (group) {
+          group.push(tag);
+        }
+      }
+    }
+    
+    // Merge overlapping phrases
+    const mergedPhrases = new Map<string, TagResult>();
+    const processed = new Set<string>();
+    
+    // Check for the special case: "open source" + "source software" pattern
+    // This is a direct check for your specific example
+    const specialCaseTags = this.findSpecialCaseTags(phraseTags);
+    if (specialCaseTags.length === 2) {
+      const combined = this.combinePhraseTags(specialCaseTags);
+      mergedPhrases.set(combined.tag, combined);
+      specialCaseTags.forEach(tag => processed.add(tag.tag));
+    }
+    
+    // Process regular phrase groups
+    for (const [, overlappingTags] of phraseGroups) {
+      if (overlappingTags.length <= 1) continue;
+      
+      for (const tag of overlappingTags) {
+        if (processed.has(tag.tag)) continue;
+        
+        // Find other tags that share words with this tag
+        const related = overlappingTags.filter(t => 
+          t !== tag && 
+          !processed.has(t.tag) && 
+          this.haveSignificantOverlap(tag.tag.split(' '), t.tag.split(' '))
+        );
+        
+        if (related.length > 0) {
+          // Create a combined tag with higher score
+          const combined = this.combinePhraseTags([tag, ...related]);
+          mergedPhrases.set(combined.tag, combined);
+          
+          // Mark all contributing tags as processed
+          processed.add(tag.tag);
+          related.forEach(r => processed.add(r.tag));
+        } else if (!mergedPhrases.has(tag.tag) && !processed.has(tag.tag)) {
+          mergedPhrases.set(tag.tag, tag);
+        }
+      }
+    }
+    
+    // Add any phrases that weren't part of any groups
+    for (const tag of phraseTags) {
+      if (!processed.has(tag.tag) && !mergedPhrases.has(tag.tag)) {
+        mergedPhrases.set(tag.tag, tag);
+      }
+    }
+    
+    return Array.from(mergedPhrases.values());
+  }
+  
+  /**
+   * Find special case tags that match patterns like "open source" and "source software"
+   * 
+   * @param tags - Tags to check
+   * @returns Array of matching tags or empty array
+   */
+  private findSpecialCaseTags(tags: TagResult[]): TagResult[] {
+    if (tags.length < 2) return [];
+    
+    // Look specifically for "open source" and "source software"
+    for (let i = 0; i < tags.length; i++) {
+      const tag1 = tags[i];
+      const words1 = tag1.tag.split(' ');
+      
+      if (words1.length !== 2) continue;
+      
+      for (let j = i + 1; j < tags.length; j++) {
+        const tag2 = tags[j];
+        const words2 = tag2.tag.split(' ');
+        
+        if (words2.length !== 2) continue;
+        
+        // Check for shared word in sequential positions
+        const sharedWords = words1.filter(word => words2.includes(word));
+        
+        if (sharedWords.length !== 1) continue;
+        
+        const sharedWord = sharedWords[0];
+        const idx1 = words1.indexOf(sharedWord);
+        const idx2 = words2.indexOf(sharedWord);
+        
+        if ((idx1 === words1.length - 1 && idx2 === 0) || 
+            (idx1 === 0 && idx2 === words2.length - 1)) {
+          return [tag1, tag2];
+        }
+      }
+    }
+    
+    return [];
+  }
+  
+  
+  /**
+   * Check if two phrase word arrays have significant overlap
+   * 
+   * @param words1 - First phrase words
+   * @param words2 - Second phrase words
+   * @returns True if phrases have significant overlap
+   */
+  private haveSignificantOverlap(words1: string[], words2: string[]): boolean {
+    // Find shared words
+    const sharedWords = words1.filter(word => words2.includes(word));
+    
+    // Calculate overlap percentage
+    const overlapPercentage1 = sharedWords.length / words1.length;
+    const overlapPercentage2 = sharedWords.length / words2.length;
+    
+    // Consider significant if >=33% words are shared in either phrase
+    // or if any shared word is rare/specific (not a common word)
+    if (overlapPercentage1 >= 0.33 || overlapPercentage2 >= 0.33) {
+      return true;
+    }
+    
+    // Special case for phrases that have at least one shared word and are likely
+    // to be related, like "open source" and "source software"
+    if (sharedWords.length > 0) {
+      // Check if they form a coherent longer phrase when combined
+      for (const shared of sharedWords) {
+        const idx1 = words1.indexOf(shared);
+        const idx2 = words2.indexOf(shared);
+        
+        // If the shared word appears at the end of the first phrase
+        // and at the beginning of the second phrase, they likely form a sequence
+        if (idx1 === words1.length - 1 && idx2 === 0) {
+          return true;
+        }
+        
+        // Or if the shared word appears at the beginning of the first phrase
+        // and at the end of the second phrase
+        if (idx1 === 0 && idx2 === words2.length - 1) {
+          return true;
+        }
+      }
+    }
+    
+    return false;
+  }
+  
+  /**
+   * Combine multiple phrase tags into a single comprehensive tag
+   * 
+   * @param tags - Phrase tags to combine
+   * @returns Combined tag
+   */
+  private combinePhraseTags(tags: TagResult[]): TagResult {
+    if (tags.length === 0) throw new Error('No tags to combine');
+    if (tags.length === 1) return tags[0];
+    
+    // Sort tags by score
+    const sortedTags = [...tags].sort((a, b) => b.score - a.score);
+    
+    // Start with the highest-scoring phrase
+    const baseTag = sortedTags[0];
+    const baseWords = baseTag.tag.split(' ');
+    const allWords = new Set<string>(baseWords);
+    
+    // Check for special case: "open source" + "source software" pattern
+    if (tags.length === 2) {
+      const tagA = sortedTags[0].tag.split(' ');
+      const tagB = sortedTags[1].tag.split(' ');
+      
+      // Find shared words
+      const sharedWords = tagA.filter(word => tagB.includes(word));
+      
+      if (sharedWords.length === 1) {
+        const sharedWord = sharedWords[0];
+        const indexInA = tagA.indexOf(sharedWord);
+        const indexInB = tagB.indexOf(sharedWord);
+        
+        // If word appears at end of first phrase and start of second phrase
+        // or vice versa, we can create a coherent combined phrase
+        if ((indexInA === tagA.length - 1 && indexInB === 0) || 
+            (indexInA === 0 && indexInB === tagB.length - 1)) {
+          
+          // Create a proper phrase by sequentially arranging the words
+          let combinedWords = [];
+          
+          if (indexInA === tagA.length - 1 && indexInB === 0) {
+            // Pattern: [A1, A2, S] + [S, B1, B2] = [A1, A2, S, B1, B2]
+            combinedWords = [...tagA, ...tagB.slice(1)];
+          } else {
+            // Pattern: [S, A1, A2] + [B1, B2, S] = [B1, B2, S, A1, A2]
+            combinedWords = [...tagB, ...tagA.slice(1)];
+          }
+          
+          return {
+            tag: combinedWords.join(' '),
+            score: Math.max(sortedTags[0].score, sortedTags[1].score) * 1.2, // 20% boost
+            frequency: Math.max(sortedTags[0].frequency, sortedTags[1].frequency),
+            type: 'phrase'
+          };
+        }
+      }
+    }
+    
+    // Standard case: add words from other phrases
+    for (let i = 1; i < sortedTags.length; i++) {
+      const otherWords = sortedTags[i].tag.split(' ');
+      otherWords.forEach(word => allWords.add(word));
+    }
+    
+    // Try to build a coherent combined phrase
+    let combinedTag: string;
+    
+    // If all tags share a common word, build around that
+    const commonWords = baseWords.filter(word => 
+      sortedTags.every(tag => tag.tag.includes(word))
+    );
+    
+    if (commonWords.length > 0) {
+      // Find the most central common word
+      // Default to the first common word
+      let centralWord = commonWords[0];
+      let centralPosition = Number.MAX_VALUE;
+      
+      for (const word of commonWords) {
+        const avgPosition = sortedTags.reduce((sum, tag) => {
+          const position = tag.tag.split(' ').indexOf(word);
+          return sum + position;
+        }, 0) / sortedTags.length;
+        
+        if (avgPosition < centralPosition) {
+          centralPosition = avgPosition;
+          centralWord = word;
+        }
+      }
+      
+      // Build phrase around the central word
+      const allTagWords = sortedTags.map(tag => tag.tag.split(' '));
+      const beforeWords = new Set<string>();
+      const afterWords = new Set<string>();
+      
+      for (const words of allTagWords) {
+        const centralIndex = words.indexOf(centralWord);
+        
+        // Add words before and after the central word
+        for (let i = 0; i < centralIndex; i++) {
+          beforeWords.add(words[i]);
+        }
+        
+        for (let i = centralIndex + 1; i < words.length; i++) {
+          afterWords.add(words[i]);
+        }
+      }
+      
+      // Combine into a coherent phrase
+      combinedTag = [...beforeWords, centralWord, ...afterWords].join(' ');
+    } else {
+      // No common words, just use the highest scoring phrase and add unique words
+      const uniqueWords = new Set<string>(baseWords);
+      
+      for (let i = 1; i < sortedTags.length; i++) {
+        const wordsToAdd = sortedTags[i].tag.split(' ');
+        wordsToAdd.forEach(word => {
+          if (!uniqueWords.has(word)) {
+            uniqueWords.add(word);
+          }
+        });
+      }
+      
+      combinedTag = Array.from(uniqueWords).join(' ');
+    }
+    
+    // Calculate combined score and frequency
+    const combinedScore = Math.max(...tags.map(tag => tag.score)) * 1.1; // Boost score by 10%
+    const combinedFrequency = Math.max(...tags.map(tag => tag.frequency));
+    
+    return {
+      tag: combinedTag,
+      score: combinedScore,
+      frequency: combinedFrequency,
+      type: 'phrase'
+    };
   }
 }
