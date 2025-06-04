@@ -1,122 +1,82 @@
-# Tagger - Intelligent Text Tag Generator
+# Tagger
 
-An advanced Angular application for generating relevant tags from text content using statistical analysis and natural language processing techniques.
+<a alt="Nx logo" href="https://nx.dev" target="_blank" rel="noreferrer"><img src="https://raw.githubusercontent.com/nrwl/nx/master/images/nx-logo.png" width="45"></a>
 
-## Overview
+✨ Your new, shiny [Nx workspace](https://nx.dev) is almost ready ✨.
 
-Tagger analyzes text to extract the most relevant keywords and phrases, helping users quickly identify important topics and themes. The application uses sophisticated scoring algorithms to evaluate both individual words and multi-word phrases (n-grams) based on frequency, length, and statistical significance.
+[Learn more about this workspace setup and its capabilities](https://nx.dev/getting-started/tutorials/angular-standalone-tutorial?utm_source=nx_project&amp;utm_medium=readme&amp;utm_campaign=nx_projects) or run `npx nx graph` to visually explore what was created. Now, let's get you up to speed!
 
-## Features
+## Finish your remote caching setup
 
-- **Word Tag Generation**: Extracts meaningful individual words from text
-- **Phrase Tag Generation**: Identifies important multi-word phrases (n-grams)
-- **Configurable Options**:
-  - Adjust maximum number of tags to generate
-  - Set minimum word length and frequency thresholds
-  - Control n-gram sizes (specific sizes or size ranges)
-  - Toggle case sensitivity
-- **Detailed Results**: View tag scores, frequencies, and types
-- **Responsive Design**: Works seamlessly on desktop and mobile devices
+[Click here to finish setting up your workspace!](https://cloud.nx.app/connect/E3E0V1X4GO)
 
-## Tag Generation Process
 
-The following flowchart illustrates how tags are generated from input text:
+## Run tasks
 
-```mermaid
-flowchart TD
-    A[Input Text] --> B[Preprocess Text]
-    B --> C[Tokenize Words]
-    C --> D{Include N-grams?}
-    
-    C --> E[Generate Word Tags]
-    E --> E1[Calculate Word Frequencies]
-    E1 --> E2[Filter by Length & Frequency]
-    E2 --> E3[Calculate Word Scores]
-    E3 --> F[Word Tags]
-    
-    D -->|Yes| G[Generate Phrase Tags]
-    G --> G1[Extract N-grams]
-    G1 --> G2[Calculate N-gram Frequencies]
-    G2 --> G3[Score N-grams]
-    G3 --> H[Phrase Tags]
-    
-    D -->|No| I[Skip Phrase Generation]
-    
-    F --> J[Combine Results]
-    H --> J
-    I --> J
-    
-    J --> K[Sort by Score]
-    K --> L[Filter Redundant Tags]
-    L --> M[Return Top Tags]
-```
-
-## Scoring Methodology
-
-### Word Scoring Factors
-- **Term Frequency**: How often the word appears relative to other words
-- **Length Bonus**: Longer words receive a higher score (log-scaled)
-- **Frequency Significance**: Words with moderate frequency score higher than extremely common or rare words
-
-### Phrase Scoring Factors
-- **Component Word Scores**: Average score of individual words in the phrase
-- **Phrase Frequency**: How often the exact phrase appears in the text
-- **Cohesion Score**: Measures how likely the words appear together vs. independently
-- **Length Penalty**: Slight penalty for very long phrases
-
-## Requirements
-
-- **Node.js**: LTS version
-
-## Getting Started
-
-### Installation
+To run the dev server for your app, use:
 
 ```sh
-# Install dependencies
-npm install
-```
-
-### Running the Application
-
-```sh
-# Start the development server
 npx nx serve tagger
-
-# Access the application at http://localhost:4200/
 ```
 
-### Building for Production
+To create a production bundle:
 
 ```sh
-# Create a production build
 npx nx build tagger
 ```
 
-## Development
-
-This project was built with Angular and Nx. For more information on the development environment:
+To see all available targets to run for a project, run:
 
 ```sh
-# See available project commands
 npx nx show project tagger
-
-# Run tests
-npx nx test tagger
-
-# Generate component
-npx nx g @nx/angular:component my-component
 ```
 
-## Technical Implementation
+These targets are either [inferred automatically](https://nx.dev/concepts/inferred-tasks?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects) or defined in the `project.json` or `package.json` files.
 
-The tag generation is implemented through two main components:
-- `TagGeneratorComponent`: Handles the UI and user interactions
-- `TextTagGeneratorService`: Contains the core algorithms for tag generation
+[More about running tasks in the docs &raquo;](https://nx.dev/features/run-tasks?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
 
-The service uses a pipeline approach:
-1. Text preprocessing and tokenization
-2. Word frequency analysis
-3. N-gram extraction (for phrases)
-4. Statistical scoring of candidates
-5. Post-processing to remove redundancy
+## Add new projects
+
+While you could add new projects to your workspace manually, you might want to leverage [Nx plugins](https://nx.dev/concepts/nx-plugins?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects) and their [code generation](https://nx.dev/features/generate-code?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects) feature.
+
+Use the plugin's generator to create new projects.
+
+To generate a new application, use:
+
+```sh
+npx nx g @nx/angular:app demo
+```
+
+To generate a new library, use:
+
+```sh
+npx nx g @nx/angular:lib mylib
+```
+
+You can use `npx nx list` to get a list of installed plugins. Then, run `npx nx list <plugin-name>` to learn about more specific capabilities of a particular plugin. Alternatively, [install Nx Console](https://nx.dev/getting-started/editor-setup?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects) to browse plugins and generators in your IDE.
+
+[Learn more about Nx plugins &raquo;](https://nx.dev/concepts/nx-plugins?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects) | [Browse the plugin registry &raquo;](https://nx.dev/plugin-registry?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
+
+
+[Learn more about Nx on CI](https://nx.dev/ci/intro/ci-with-nx#ready-get-started-with-your-provider?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
+
+## Install Nx Console
+
+Nx Console is an editor extension that enriches your developer experience. It lets you run tasks, generate code, and improves code autocompletion in your IDE. It is available for VSCode and IntelliJ.
+
+[Install Nx Console &raquo;](https://nx.dev/getting-started/editor-setup?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
+
+## Useful links
+
+Learn more:
+
+- [Learn more about this workspace setup](https://nx.dev/getting-started/tutorials/angular-standalone-tutorial?utm_source=nx_project&amp;utm_medium=readme&amp;utm_campaign=nx_projects)
+- [Learn about Nx on CI](https://nx.dev/ci/intro/ci-with-nx?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
+- [Releasing Packages with Nx release](https://nx.dev/features/manage-releases?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
+- [What are Nx plugins?](https://nx.dev/concepts/nx-plugins?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
+
+And join the Nx community:
+- [Discord](https://go.nx.dev/community)
+- [Follow us on X](https://twitter.com/nxdevtools) or [LinkedIn](https://www.linkedin.com/company/nrwl)
+- [Our Youtube channel](https://www.youtube.com/@nxdevtools)
+- [Our blog](https://nx.dev/blog?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
