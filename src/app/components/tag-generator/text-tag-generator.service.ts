@@ -105,7 +105,10 @@ export class TextTagGeneratorService {
     
     // Combine and sort all tags by score
     const allTags = [...topWords, ...topPhrases];
-    return allTags.sort((a, b) => b.score - a.score);
+    const sortedTags = allTags.sort((a, b) => b.score - a.score);
+    
+    // Filter out component words that appear in higher-scoring phrases
+    return this.filterComponentWords(sortedTags);
   }
 
   /**
@@ -299,5 +302,70 @@ export class TextTagGeneratorService {
     }
     
     return scoredNgrams;
+  }
+
+  /**
+   * Filter out individual words that are components of higher-scoring phrases
+   * and longer phrases that contain shorter, higher-scoring phrases
+   */
+  private filterComponentWords(tags: TagResult[]): TagResult[] {
+    const filteredTags: TagResult[] = [];
+    const componentWordsToRemove = new Set<string>();
+    const phrasesToRemove = new Set<string>();
+    
+    // Sort tags by score (highest first) to process higher-scoring items first
+    const sortedTags = [...tags].sort((a, b) => b.score - a.score);
+    
+    // First pass: identify phrases to keep and their components
+    const keptPhrases = new Set<string>();
+    for (const tag of sortedTags) {
+      if (tag.type === 'phrase' && !phrasesToRemove.has(tag.tag)) {
+        keptPhrases.add(tag.tag);
+        
+        // Mark component words for removal
+        const words = tag.tag.split(' ');
+        words.forEach(word => componentWordsToRemove.add(word));
+        
+        // Check if this phrase should exclude other phrases
+        for (const otherTag of sortedTags) {
+          if (otherTag.type === 'phrase' && 
+              otherTag.tag !== tag.tag && 
+              otherTag.score < tag.score) {
+            
+            // Check if the other phrase contains this phrase
+            const otherWords = otherTag.tag.split(' ');
+            const thisWords = tag.tag.split(' ');
+            
+            // Check if thisWords appears as a subsequence in otherWords
+            for (let i = 0; i <= otherWords.length - thisWords.length; i++) {
+              let matches = true;
+              for (let j = 0; j < thisWords.length; j++) {
+                if (otherWords[i + j] !== thisWords[j]) {
+                  matches = false;
+                  break;
+                }
+              }
+              if (matches) {
+                phrasesToRemove.add(otherTag.tag);
+                break;
+              }
+            }
+          }
+        }
+      }
+    }
+    
+    // Second pass: filter tags
+    for (const tag of sortedTags) {
+      if (tag.type === 'phrase' && !phrasesToRemove.has(tag.tag)) {
+        // Include phrases that weren't marked for removal
+        filteredTags.push(tag);
+      } else if (tag.type === 'word' && !componentWordsToRemove.has(tag.tag)) {
+        // Only include words that are not components of any kept phrase
+        filteredTags.push(tag);
+      }
+    }
+    
+    return filteredTags;
   }
 }
