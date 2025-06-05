@@ -1,5 +1,5 @@
 import { Pipe, PipeTransform } from '@angular/core';
-import { TagResult } from './text-tag-generator.model';
+import { TagResult } from './text-tag-generator.service';
 
 @Pipe({
   name: 'filterByType',
