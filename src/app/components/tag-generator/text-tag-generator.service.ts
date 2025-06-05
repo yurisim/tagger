@@ -37,9 +37,9 @@ export class TextTagGeneratorService {
   // Scoring weights for different factors
   private readonly SCORING_WEIGHTS = {
     word: {
-      termFrequency: 0.4,
-      lengthBonus: 0.3,
-      frequencySignificance: 0.3
+      termFrequency: 0.45,
+      lengthBonus: 0.1,
+      frequencySignificance: 0.45
     },
     phrase: {
       componentScore: 0.4,
@@ -589,8 +589,9 @@ export class TextTagGeneratorService {
   // ===========================
 
   /**
-   * Filter out individual words that are components of higher-scoring phrases
-   * and longer phrases that contain shorter, higher-scoring phrases
+   * Filter out individual words that are components of higher-scoring phrases,
+   * longer phrases that contain shorter, higher-scoring phrases,
+   * and consolidate singular/plural forms of the same concept
    * 
    * @param tags - All generated tags sorted by score
    * @returns Filtered tags without redundant components
@@ -599,12 +600,16 @@ export class TextTagGeneratorService {
     const filteredTags: TagResult[] = [];
     const componentWordsToRemove = new Set<string>();
     const phrasesToRemove = new Set<string>();
+    const singularPluralSets = new Map<string, TagResult[]>();
     
     // Sort tags by score (highest first)
     const sortedTags = [...tags].sort((a, b) => b.score - a.score);
     
     // Process phrases first to identify components and overlaps
     this.identifyRedundantTags(sortedTags, componentWordsToRemove, phrasesToRemove);
+    
+    // Group singular/plural variants
+    this.groupSingularPluralForms(sortedTags, singularPluralSets, phrasesToRemove);
     
     // Filter final results
     for (const tag of sortedTags) {
@@ -692,5 +697,171 @@ export class TextTagGeneratorService {
       }
     }
     return false;
+  }
+  
+  /**
+   * Group and handle singular/plural forms of the same concept
+   * Keeps the higher scoring version and marks others for removal
+   * 
+   * @param sortedTags - Tags sorted by score (highest first)
+   * @param singularPluralSets - Map to store related forms
+   * @param phrasesToRemove - Set to populate with forms to remove
+   */
+  private groupSingularPluralForms(
+    sortedTags: TagResult[],
+    singularPluralSets: Map<string, TagResult[]>,
+    phrasesToRemove: Set<string>
+  ): void {
+    // Direct comparison first - catch exact singular/plural pairs
+    this.identifyDirectSingularPluralPairs(sortedTags, phrasesToRemove);
+    
+    // Then do the more general approach
+    // First pass: group potential singular/plural variants
+    for (const tag of sortedTags) {
+      if (phrasesToRemove.has(tag.tag)) continue;
+      
+      const base = this.getSingularForm(tag.tag);
+      
+      // Skip if this is a single-character difference or very short term
+      if (Math.abs(tag.tag.length - base.length) <= 1 || tag.tag.length < 4) continue;
+      
+      // Skip if base is the same as original
+      if (base === tag.tag) continue;
+      
+      // Group by singular form
+      if (!singularPluralSets.has(base)) {
+        singularPluralSets.set(base, []);
+      }
+      
+      singularPluralSets.get(base)?.push(tag);
+    }
+    
+    // Second pass: For each group, keep only the highest scoring variant
+    for (const [, variants] of singularPluralSets.entries()) {
+      if (variants.length <= 1) continue;
+      
+      // Sort variants by score (highest first)
+      variants.sort((a, b) => b.score - a.score);
+      
+      // Keep the highest scoring variant, mark others for removal
+      for (let i = 1; i < variants.length; i++) {
+        phrasesToRemove.add(variants[i].tag);
+      }
+    }
+  }
+  
+  /**
+   * Identify direct singular/plural pairs in phrases
+   * Specifically targeting cases like "native american" vs "native americans"
+   * 
+   * @param sortedTags - Tags sorted by score
+   * @param phrasesToRemove - Set to populate with forms to remove
+   */
+  private identifyDirectSingularPluralPairs(
+    sortedTags: TagResult[],
+    phrasesToRemove: Set<string>
+  ): void {
+    // Create temporary map for easy lookup
+    const tagMap = new Map<string, TagResult>();
+    for (const tag of sortedTags) {
+      tagMap.set(tag.tag, tag);
+    }
+    
+    // Process each tag looking for singular/plural pairs
+    for (const tag of sortedTags) {
+      // Skip if already marked for removal
+      if (phrasesToRemove.has(tag.tag)) continue;
+      
+      const words = tag.tag.split(' ');
+      
+      // Only process phrases (multi-word tags)
+      if (words.length <= 1) continue;
+      
+      // Check if this might be plural form (ends with 's')
+      if (words[words.length - 1].endsWith('s')) {
+        // Try removing 's' from the last word
+        const lastWord = words[words.length - 1];
+        const singularLastWord = lastWord.endsWith('s') ? lastWord.substring(0, lastWord.length - 1) : lastWord;
+        
+        // Construct potential singular form
+        const potentialSingular = [...words.slice(0, words.length - 1), singularLastWord].join(' ');
+        
+        // Check if potential singular form exists in our tags
+        if (tagMap.has(potentialSingular)) {
+          const pluralTag = tag;
+          const singularTag = tagMap.get(potentialSingular);
+          
+          // Keep the higher-scoring variant
+          if (singularTag && pluralTag.score > singularTag.score) {
+            phrasesToRemove.add(singularTag.tag);
+          } else if (singularTag) {
+            phrasesToRemove.add(pluralTag.tag);
+          }
+        }
+      }
+      
+      // Check if this might be singular form (doesn't end with 's')
+      else {
+        // Try adding 's' to the last word
+        const lastWord = words[words.length - 1];
+        const pluralLastWord = lastWord + 's';
+        
+        // Construct potential plural form
+        const potentialPlural = [...words.slice(0, words.length - 1), pluralLastWord].join(' ');
+        
+        // Check if potential plural form exists in our tags
+        if (tagMap.has(potentialPlural)) {
+          const singularTag = tag;
+          const pluralTag = tagMap.get(potentialPlural);
+          
+          // Keep the higher-scoring variant
+          if (pluralTag && singularTag.score > pluralTag.score) {
+            phrasesToRemove.add(pluralTag.tag);
+          } else if (pluralTag) {
+            phrasesToRemove.add(singularTag.tag);
+          }
+        }
+      }
+    }
+  }
+  
+  /**
+   * Get singular form of a word or phrase
+   * Handles common plural endings
+   * 
+   * @param text - Input text
+   * @returns Singular form
+   */
+  private getSingularForm(text: string): string {
+    // For phrases, we only care about the last word
+    const words = text.split(' ');
+    const lastWord = words[words.length - 1];
+    let singularLastWord = lastWord;
+    
+    // Common plural endings
+    if (lastWord.endsWith('s')) {
+      if (lastWord.endsWith('ies')) {
+        // babies -> baby, countries -> country
+        singularLastWord = lastWord.substring(0, lastWord.length - 3) + 'y';
+      } else if (lastWord.endsWith('es') && (
+          lastWord.endsWith('ches') || 
+          lastWord.endsWith('shes') || 
+          lastWord.endsWith('sses') || 
+          lastWord.endsWith('xes')
+      )) {
+        // matches -> match, boxes -> box
+        singularLastWord = lastWord.substring(0, lastWord.length - 2);
+      } else if (lastWord.endsWith('s')) {
+        // cats -> cat
+        singularLastWord = lastWord.substring(0, lastWord.length - 1);
+      }
+    }
+    
+    // Replace last word with singular form
+    if (words.length > 1) {
+      return words.slice(0, words.length - 1).join(' ') + ' ' + singularLastWord;
+    }
+    
+    return singularLastWord;
   }
 }
