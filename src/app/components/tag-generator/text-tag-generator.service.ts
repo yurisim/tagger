@@ -1,4 +1,5 @@
 import { Injectable } from '@angular/core';
+import pluralize from './pluralize';
 
 // ===========================
 // INTERFACES AND TYPES
@@ -715,25 +716,21 @@ export class TextTagGeneratorService {
     const lastWord = words[words.length - 1];
     let singularForm: string | null = null;
     let pluralForm: string | null = null;
-    
-    // Case 1: Current tag might be plural form
-    if (lastWord.endsWith('s')) {
-      // Get singular form of the last word
-      const singularLastWord = this.getSingularForm(lastWord);
-      if (singularLastWord !== lastWord) { // Only if it's actually different
-        // Construct potential singular form of the whole phrase
-        singularForm = [...words.slice(0, words.length - 1), singularLastWord].join(' ');
-        pluralForm = tag.tag;
-      }
-    } 
-    // Case 2: Current tag might be singular form
-    else {
-      // Simplistic pluralization for comparison purposes
-      const pluralLastWord = lastWord + 's';
-      // Construct potential plural form
-      pluralForm = [...words.slice(0, words.length - 1), pluralLastWord].join(' ');
-      singularForm = tag.tag;
+
+    const wordStemArray = words.slice(0, words.length - 1);
+    const singularLast = pluralize.singular(lastWord);
+    const pluralLast = pluralize.plural(lastWord);
+
+    // Only construct singular/plural phrase forms if pluralize determined
+    // distinct singular and plural versions of the last word.
+    if (singularLast !== pluralLast) {
+      singularForm = [...wordStemArray, singularLast].join(' ');
+      pluralForm = [...wordStemArray, pluralLast].join(' ');
     }
+    // If singularLast === pluralLast (e.g., for uncountable nouns or if pluralize made no change),
+    // singularForm and pluralForm will remain null. The subsequent check:
+    // if (singularForm && pluralForm && tagMap.has(singularForm) && tagMap.has(pluralForm))
+    // will correctly not find a pair to process.
     
     // Check if counterpart exists
     if (singularForm && pluralForm && tagMap.has(singularForm) && tagMap.has(pluralForm)) {
@@ -747,45 +744,5 @@ export class TextTagGeneratorService {
         phrasesToRemove.add(singularForm);
       }
     }
-  }
-    
-  /**
-   * Get singular form of a word or phrase
-   * Handles common plural endings
-   * 
-   * @param text - Input text
-   * @returns Singular form
-   */
-  private getSingularForm(text: string): string {
-    // For phrases, we only care about the last word
-    const words = text.split(' ');
-    const lastWord = words[words.length - 1];
-    let singularLastWord = lastWord;
-    
-    // Common plural endings
-    if (lastWord.endsWith('s')) {
-      if (lastWord.endsWith('ies')) {
-        // babies -> baby, countries -> country
-        singularLastWord = lastWord.substring(0, lastWord.length - 3) + 'y';
-      } else if (lastWord.endsWith('es') && (
-          lastWord.endsWith('ches') || 
-          lastWord.endsWith('shes') || 
-          lastWord.endsWith('sses') || 
-          lastWord.endsWith('xes')
-      )) {
-        // matches -> match, boxes -> box
-        singularLastWord = lastWord.substring(0, lastWord.length - 2);
-      } else {
-        // cats -> cat
-        singularLastWord = lastWord.substring(0, lastWord.length - 1);
-      }
-    }
-    
-    // Replace last word with singular form
-    if (words.length > 1) {
-      return words.slice(0, words.length - 1).join(' ') + ' ' + singularLastWord;
-    }
-    
-    return singularLastWord;
   }
 }
