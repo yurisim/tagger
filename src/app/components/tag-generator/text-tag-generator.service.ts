@@ -150,8 +150,11 @@ export class TextTagGeneratorService {
     // Step 4: Combine and filter results
     const allTags = [...wordResults, ...phraseResults];
     const sortedTags = allTags.sort((a, b) => b.score - a.score);
-    
-    return this.filterComponentWords(sortedTags);
+
+    // Filter out phrases that are subsets of higher-scoring super-phrases
+    const refinedTags = this.filterSubsumedPhrases(sortedTags);
+  
+    return this.filterComponentWords(refinedTags);
   }
 
   // ===========================
@@ -614,6 +617,50 @@ export class TextTagGeneratorService {
     
     // Cohesion is high when actual frequency approaches or exceeds expected
     return expectedFreq > 0 ? Math.min(phraseFreq / expectedFreq, 1) : 0;
+  }
+
+  /**
+   * Filters out phrases that are entire subsets of other phrases in the list,
+   * provided the super-phrase has a strictly higher score.
+   * Keeps the original score of the "winning" super-phrase.
+   *
+   * @param phrases An array of TagResult objects.
+   * @returns A new array of TagResult objects with subsumed phrases removed.
+   */
+  public filterSubsumedPhrases(phrases: TagResult[]): TagResult[] {
+    if (!phrases || phrases.length === 0) {
+      return [];
+    }
+
+    const outputPhrases: TagResult[] = [];
+
+    for (let i = 0; i < phrases.length; i++) {
+      const currentPhrase = phrases[i];
+      let isSubsumedByHigherScoringSuperPhrase = false;
+
+      for (let j = 0; j < phrases.length; j++) {
+        if (i === j) {
+          continue; // Don't compare a phrase against itself
+        }
+
+        const potentialSuperPhrase = phrases[j];
+
+        // Check if currentPhrase.tag is a sub-phrase of (or identical to) potentialSuperPhrase.tag
+        // AND potentialSuperPhrase has a strictly higher score.
+        if (
+          potentialSuperPhrase.tag.includes(currentPhrase.tag) &&
+          potentialSuperPhrase.score > currentPhrase.score
+        ) {
+          isSubsumedByHigherScoringSuperPhrase = true;
+          break; // Found a reason to remove currentPhrase
+        }
+      }
+
+      if (!isSubsumedByHigherScoringSuperPhrase) {
+        outputPhrases.push(currentPhrase);
+      }
+    }
+    return outputPhrases;
   }
 
   /**
