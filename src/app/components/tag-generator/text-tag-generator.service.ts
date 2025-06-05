@@ -37,9 +37,9 @@ export class TextTagGeneratorService {
   // Scoring weights for different factors
   private readonly SCORING_WEIGHTS = {
     word: {
-      termFrequency: 0.4,
-      lengthBonus: 0.2,
-      frequencySignificance: 0.4
+      termFrequency: 0.45,
+      lengthBonus: 0.1,
+      frequencySignificance: 0.45
     },
     phrase: {
       componentScore: 0.4,
