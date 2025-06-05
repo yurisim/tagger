@@ -13,7 +13,6 @@ export interface TagResult {
 }
 
 export interface GeneratorOptions {
-  maxTags?: number;
   minWordLength?: number;
   minFrequency?: number;
   includeNgrams?: boolean;
@@ -34,6 +33,11 @@ export class TextTagGeneratorService {
   // ===========================
   // CONSTANTS
   // ===========================
+
+  // Dynamic Tag Calculation Constants
+  private readonly DYNAMIC_TAG_MIN = 5;
+  private readonly DYNAMIC_TAG_MAX = 20;
+  private readonly DYNAMIC_TAG_SQRT_FACTOR = 0.4;
   
   // Scoring weights for different factors
   private readonly SCORING_WEIGHTS = {
@@ -71,7 +75,7 @@ export class TextTagGeneratorService {
       'these', 'they', 'them', 'their', 'there', 'then', 'than', 'when',
       'where', 'who', 'which', 'what', 'how', 'why', 'but', 'or', 'so',
       'if', 'can', 'have', 'had', 'been', 'being', 'do', 'does', 'did', 'through',
-      'very', 'really', 'quite', 'just', 'only', 'also', 'even', 'still',
+      'very', 'really', 'quite', 'just', 'only', 'also', 'even', 'still', 'while',
       // Additional pronouns
       'i', 'you', 'we', 'us', 'me', 'my', 'your', 'our', 'his', 'her', 'him','she','he',
       // Additional determiners
@@ -109,9 +113,8 @@ export class TextTagGeneratorService {
    */
   public generateTags(text: string, options: GeneratorOptions = {}): TagResult[] {
     const {
-      maxTags = 10,
       minWordLength = 3,
-      minFrequency = 1,
+      minFrequency = 1, // Added minFrequency destructuring
       includeNgrams = true,
       ngramSizes = [2],
       minNgramSize,
@@ -122,9 +125,13 @@ export class TextTagGeneratorService {
     // Step 1: Preprocess and tokenize text
     const words = this.preprocessText(text, caseSensitive);
     const wordFrequencies = this.calculateWordFrequency(words);
+    const wordCount = words.length;
+
+    // Calculate dynamic max tags
+    const dynamicMaxTags = this.calculateDynamicMaxTags(wordCount);
     
     // Step 2: Generate word tags
-    const wordResults = this.generateWordTags(words, wordFrequencies, minWordLength, minFrequency, maxTags);
+    const wordResults = this.generateWordTags(words, wordFrequencies, minWordLength, minFrequency, dynamicMaxTags);
     
     // Step 3: Generate phrase tags if requested
     let phraseResults: TagResult[] = [];
@@ -135,8 +142,8 @@ export class TextTagGeneratorService {
         ngramSizes, 
         minNgramSize, 
         maxNgramSize, 
-        minFrequency, 
-        maxTags
+        minFrequency, // Added minFrequency argument
+        dynamicMaxTags
       );
     }
     
@@ -145,6 +152,25 @@ export class TextTagGeneratorService {
     const sortedTags = allTags.sort((a, b) => b.score - a.score);
     
     return this.filterComponentWords(sortedTags);
+  }
+
+  // ===========================
+  // DYNAMIC TAG CALCULATION
+  // ===========================
+
+  /**
+   * Calculate the maximum number of tags dynamically based on word count.
+   * Uses a square root function to scale sub-linearly.
+   * 
+   * @param wordCount - The total number of relevant words in the text.
+   * @returns The calculated maximum number of tags.
+   */
+  private calculateDynamicMaxTags(wordCount: number): number {
+    if (wordCount === 0) {
+      return 0;
+    }
+    const calculatedTags = Math.round(this.DYNAMIC_TAG_SQRT_FACTOR * Math.sqrt(wordCount));
+    return Math.max(this.DYNAMIC_TAG_MIN, Math.min(this.DYNAMIC_TAG_MAX, calculatedTags));
   }
 
   // ===========================
