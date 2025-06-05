@@ -1,11 +1,8 @@
 import { Component, ViewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import {
-  TextTagGeneratorService,
-  TagResult,
-  GeneratorOptions,
-} from './text-tag-generator.service';
+import { TextTagGeneratorService } from './text-tag-generator.service';
+import { TagResult, GeneratorOptions } from './text-tag-generator.model';
 import { FilterByTypePipe } from './filter-by-type.pipe';
 
 @Component({

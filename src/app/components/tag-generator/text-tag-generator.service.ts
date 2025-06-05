@@ -1,27 +1,12 @@
 import { Injectable } from '@angular/core';
 import pluralize from './pluralize';
-
-// ===========================
-// INTERFACES AND TYPES
-// ===========================
-
-export interface TagResult {
-  tag: string;
-  score: number;
-  frequency: number;
-  type?: string;
-}
-
-export interface GeneratorOptions {
-  maxTags?: number;
-  minWordLength?: number;
-  minFrequency?: number;
-  includeNgrams?: boolean;
-  ngramSizes?: number[]; 
-  minNgramSize?: number; 
-  maxNgramSize?: number; 
-  caseSensitive?: boolean;
-}
+import { TagResult, GeneratorOptions } from './text-tag-generator.model';
+import {
+  SCORING_WEIGHTS,
+  OPTIMAL_RELATIVE_FREQUENCY,
+  FREQUENCY_DECAY_FACTOR,
+  STOP_WORDS
+} from './text-tag-generator.constants';
 
 // ===========================
 // SERVICE IMPLEMENTATION
@@ -31,68 +16,14 @@ export interface GeneratorOptions {
   providedIn: 'root'
 })
 export class TextTagGeneratorService {
-  // ===========================
-  // CONSTANTS
-  // ===========================
-  
-  // Scoring weights for different factors
-  private readonly SCORING_WEIGHTS = {
-    word: {
-      termFrequency: 0.45,
-      lengthBonus: 0.1,
-      frequencySignificance: 0.45
-    },
-    phrase: {
-      componentScore: 0.4,
-      frequencyScore: 0.3,
-      cohesionScore: 0.2,
-      lengthPenalty: 0.1
-    }
-  };
-  
-  // Optimal relative frequency for scoring (3% of total words)
-  private readonly OPTIMAL_RELATIVE_FREQUENCY = 0.03;
-  
-  // Frequency significance decay factor
-  private readonly FREQUENCY_DECAY_FACTOR = 50;
-  
-  // Common English stop words
-  private readonly stopWords: Set<string>;
-  
+
   // ===========================
   // CONSTRUCTOR
   // ===========================
   
   constructor() {
-    this.stopWords = new Set([
-      'a', 'an', 'and', 'are', 'as', 'at', 'be', 'by', 'for', 'from',
-      'has', 'he', 'in', 'is', 'it', 'its', 'of', 'on', 'that', 'the',
-      'to', 'was', 'will', 'with', 'would', 'could', 'should', 'this',
-      'these', 'they', 'them', 'their', 'there', 'then', 'than', 'when',
-      'where', 'who', 'which', 'what', 'how', 'why', 'but', 'or', 'so',
-      'if', 'can', 'have', 'had', 'been', 'being', 'do', 'does', 'did', 'through',
-      'very', 'really', 'quite', 'just', 'only', 'also', 'even', 'still',
-      // Additional pronouns
-      'i', 'you', 'we', 'us', 'me', 'my', 'your', 'our', 'his', 'her', 'him','she','he',
-      // Additional determiners
-      'some', 'any', 'all', 'each', 'every', 'no', 'both', 'either', 'neither', 'such',
-      // Additional prepositions
-      'about', 'above', 'across', 'after', 'against', 'along', 'among', 'around',
-      'before', 'behind', 'below', 'beneath', 'beside', 'between', 'beyond',
-      'during', 'except', 'inside', 'into', 'near', 'over', 'since', 'under',
-      'until', 'upon', 'within', 'without',
-      // Common low-semantic verbs
-      'get', 'got', 'make', 'made', 'take', 'took', 'come', 'came', 'go', 'went',
-      'see', 'saw', 'know', 'knew', 'think', 'thought', 'say', 'said', 'give', 'gave',
-      // Modal verbs
-      'may', 'might', 'must', 'shall', 'ought',
-      // Quantifiers and intensifiers
-      'much', 'many', 'more', 'most', 'less', 'few', 'little', 'enough', 'too',
-      'rather', 'pretty', 'fairly',
-      // Negation
-      'not', 'none', 'nothing', 'nobody', 'nowhere'
-    ])
-    
+    // stopWords is now imported from constants and doesn't need initialization here.
+
   }
 
   // ===========================
@@ -173,7 +104,7 @@ export class TextTagGeneratorService {
       .split(/\s+/)
       .filter(word => 
         word.length > 1 &&
-        !this.stopWords.has(word) &&
+        !STOP_WORDS.has(word) &&
         !/^[''"`\-_]+$/.test(word)
       );
   }
@@ -289,9 +220,9 @@ export class TextTagGeneratorService {
       
       // Combine scores with weights
       const finalScore = 
-        (tf * this.SCORING_WEIGHTS.word.termFrequency) + 
-        (lengthBonus * this.SCORING_WEIGHTS.word.lengthBonus) + 
-        (freqSignificance * this.SCORING_WEIGHTS.word.frequencySignificance);
+        (tf * SCORING_WEIGHTS.word.termFrequency) + 
+        (lengthBonus * SCORING_WEIGHTS.word.lengthBonus) + 
+        (freqSignificance * SCORING_WEIGHTS.word.frequencySignificance);
       
       scores.set(word, finalScore);
     }
@@ -309,9 +240,9 @@ export class TextTagGeneratorService {
    */
   private calculateFrequencySignificance(frequency: number, totalWords: number): number {
     const relativeFreq = frequency / totalWords;
-    const distance = Math.abs(relativeFreq - this.OPTIMAL_RELATIVE_FREQUENCY);
+    const distance = Math.abs(relativeFreq - OPTIMAL_RELATIVE_FREQUENCY);
     
-    return Math.exp(-distance * this.FREQUENCY_DECAY_FACTOR);
+    return Math.exp(-distance * FREQUENCY_DECAY_FACTOR);
   }
 
   // ===========================
@@ -528,10 +459,10 @@ export class TextTagGeneratorService {
     const lengthPenalty = 1 / Math.sqrt(phraseWords.length);
     
     // Combine scores with weights
-    return (avgComponentScore * this.SCORING_WEIGHTS.phrase.componentScore) + 
-           (phraseFreqScore * this.SCORING_WEIGHTS.phrase.frequencyScore) + 
-           (cohesionScore * this.SCORING_WEIGHTS.phrase.cohesionScore) + 
-           (lengthPenalty * this.SCORING_WEIGHTS.phrase.lengthPenalty);
+    return (avgComponentScore * SCORING_WEIGHTS.phrase.componentScore) + 
+           (phraseFreqScore * SCORING_WEIGHTS.phrase.frequencyScore) + 
+           (cohesionScore * SCORING_WEIGHTS.phrase.cohesionScore) + 
+           (lengthPenalty * SCORING_WEIGHTS.phrase.lengthPenalty);
   }
 
   /**
