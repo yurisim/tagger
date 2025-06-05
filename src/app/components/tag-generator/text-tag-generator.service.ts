@@ -121,15 +121,17 @@ export class TextTagGeneratorService {
 
     // Step 1: Preprocess and tokenize text
     const words = this.preprocessText(text, caseSensitive);
+    const wordFrequencies = this.calculateWordFrequency(words);
     
     // Step 2: Generate word tags
-    const wordResults = this.generateWordTags(words, minWordLength, minFrequency, maxTags);
+    const wordResults = this.generateWordTags(words, wordFrequencies, minWordLength, minFrequency, maxTags);
     
     // Step 3: Generate phrase tags if requested
     let phraseResults: TagResult[] = [];
     if (includeNgrams) {
       phraseResults = this.generatePhraseTags(
         words, 
+        wordFrequencies, 
         ngramSizes, 
         minNgramSize, 
         maxNgramSize, 
@@ -186,6 +188,7 @@ export class TextTagGeneratorService {
    * Generate word-based tags with scoring
    * 
    * @param words - Preprocessed word tokens
+   * @param wordFrequencies - Word frequency map
    * @param minWordLength - Minimum word length to consider
    * @param minFrequency - Minimum frequency threshold
    * @param maxTags - Maximum number of tags to return
@@ -193,15 +196,13 @@ export class TextTagGeneratorService {
    */
   private generateWordTags(
     words: string[], 
+    wordFrequencies: Map<string, number>,
     minWordLength: number, 
     minFrequency: number,
     maxTags: number
   ): TagResult[] {
-    // Calculate frequencies
-    const wordFreq = this.calculateWordFrequency(words);
-    
     // Filter by criteria
-    const filteredWords = this.filterWords(wordFreq, minWordLength, minFrequency);
+    const filteredWords = this.filterWords(wordFrequencies, minWordLength, minFrequency);
     
     // Calculate scores
     const wordScores = this.calculateWordScores(filteredWords, words.length);
@@ -212,7 +213,7 @@ export class TextTagGeneratorService {
       wordResults.push({
         tag: word,
         score: score,
-        frequency: wordFreq.get(word) || 0,
+        frequency: wordFrequencies.get(word) || 0,
         type: 'word'
       });
     }
@@ -322,6 +323,7 @@ export class TextTagGeneratorService {
    * Generate phrase-based tags (n-grams) with scoring
    * 
    * @param words - Preprocessed word tokens
+   * @param wordFrequencies - Word frequency map
    * @param ngramSizes - Explicit n-gram sizes to generate
    * @param minNgramSize - Minimum n-gram size (for range-based generation)
    * @param maxNgramSize - Maximum n-gram size (for range-based generation)
@@ -331,6 +333,7 @@ export class TextTagGeneratorService {
    */
   private generatePhraseTags(
     words: string[],
+    wordFrequencies: Map<string, number>,
     ngramSizes: number[],
     minNgramSize: number | undefined,
     maxNgramSize: number | undefined,
@@ -339,6 +342,7 @@ export class TextTagGeneratorService {
   ): TagResult[] {
     const ngramScores = this.generateNgrams(
       words, 
+      wordFrequencies,
       ngramSizes, 
       minNgramSize, 
       maxNgramSize, 
@@ -366,6 +370,7 @@ export class TextTagGeneratorService {
    * Generate n-grams and score them
    * 
    * @param words - Word tokens
+   * @param wordFrequencies - Word frequency map
    * @param ngramSizes - Explicit sizes to generate
    * @param minNgramSize - Minimum size for range-based generation
    * @param maxNgramSize - Maximum size for range-based generation
@@ -374,13 +379,13 @@ export class TextTagGeneratorService {
    */
   private generateNgrams(
     words: string[], 
+    wordFrequencies: Map<string, number>,
     ngramSizes: number[] = [2], 
     minNgramSize?: number, 
     maxNgramSize?: number, 
     minFrequency = 1
   ): Map<string, { score: number; frequency: number }> {
     // Get word scores for phrase scoring
-    const wordFrequencies = this.calculateWordFrequency(words);
     const wordScores = this.calculateWordScores(wordFrequencies, words.length);
     
     // Determine sizes to generate
