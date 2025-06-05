@@ -851,7 +851,7 @@ export class TextTagGeneratorService {
       )) {
         // matches -> match, boxes -> box
         singularLastWord = lastWord.substring(0, lastWord.length - 2);
-      } else if (lastWord.endsWith('s')) {
+      } else {
         // cats -> cat
         singularLastWord = lastWord.substring(0, lastWord.length - 1);
       }
