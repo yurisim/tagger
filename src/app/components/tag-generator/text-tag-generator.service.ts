@@ -727,10 +727,6 @@ export class TextTagGeneratorService {
       singularForm = [...wordStemArray, singularLast].join(' ');
       pluralForm = [...wordStemArray, pluralLast].join(' ');
     }
-    // If singularLast === pluralLast (e.g., for uncountable nouns or if pluralize made no change),
-    // singularForm and pluralForm will remain null. The subsequent check:
-    // if (singularForm && pluralForm && tagMap.has(singularForm) && tagMap.has(pluralForm))
-    // will correctly not find a pair to process.
     
     // Check if counterpart exists
     if (singularForm && pluralForm && tagMap.has(singularForm) && tagMap.has(pluralForm)) {
