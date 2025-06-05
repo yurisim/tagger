@@ -134,20 +134,6 @@ function replaceWord(replaceMap: { [key: string]: string }, keepMap: { [key: str
 }
 
 /**
- * Check if a word is part of the map.
- */
-function checkWord(replaceMap: { [key: string]: string }, keepMap: { [key: string]: string }, rules: Array<[RegExp, string]>): (word: string) => boolean {
-  return function (word: string): boolean {
-    const token = word.toLowerCase();
-
-    if (Object.prototype.hasOwnProperty.call(keepMap, token)) return true;
-    if (Object.prototype.hasOwnProperty.call(replaceMap, token)) return false;
-
-    return sanitizeWord(token, token, rules) === token;
-  };
-}
-
-/**
  * Pluralize or singularize a word based on the passed in count.
  *
  * @param  {string}  word      The word to pluralize
@@ -171,29 +157,11 @@ pluralize.plural = replaceWord(
 );
 
 /**
- * Check if a word is plural.
- *
- * @type {Function}
- */
-pluralize.isPlural = checkWord(
-  irregularSingles, irregularPlurals, pluralRules
-);
-
-/**
  * Singularize a word.
  *
  * @type {Function}
  */
 pluralize.singular = replaceWord(
-  irregularPlurals, irregularSingles, singularRules
-);
-
-/**
- * Check if a word is singular.
- *
- * @type {Function}
- */
-pluralize.isSingular = checkWord(
   irregularPlurals, irregularSingles, singularRules
 );
 
