@@ -37,9 +37,9 @@ export class TextTagGeneratorService {
   // Scoring weights for different factors
   private readonly SCORING_WEIGHTS = {
     word: {
-      termFrequency: 0.45,
-      lengthBonus: 0.1,
-      frequencySignificance: 0.45
+      termFrequency: 0.4,
+      lengthBonus: 0.2,
+      frequencySignificance: 0.4
     },
     phrase: {
       componentScore: 0.4,
@@ -72,7 +72,7 @@ export class TextTagGeneratorService {
       'if', 'can', 'have', 'had', 'been', 'being', 'do', 'does', 'did', 'through',
       'very', 'really', 'quite', 'just', 'only', 'also', 'even', 'still',
       // Additional pronouns
-      'i', 'you', 'we', 'us', 'me', 'my', 'your', 'our', 'his', 'her', 'him',
+      'i', 'you', 'we', 'us', 'me', 'my', 'your', 'our', 'his', 'her', 'him','she','he',
       // Additional determiners
       'some', 'any', 'all', 'each', 'every', 'no', 'both', 'either', 'neither', 'such',
       // Additional prepositions
