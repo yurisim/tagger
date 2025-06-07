@@ -47,8 +47,8 @@ export class TextTagGeneratorService {
       frequencySignificance: 0.45
     },
     phrase: {
-      componentScore: 0.4,
-      frequencyScore: 0.3,
+      componentScore: 0.5,
+      frequencyScore: 0.2,
       cohesionScore: 0.2,
       lengthPenalty: 0.1
     }
