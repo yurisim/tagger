@@ -312,7 +312,7 @@ export class TextTagGeneratorService {
       const tf = freq / maxFreq;
       
       // 2. Word length bonus (longer words often more meaningful)
-      const lengthBonus = Math.log(word.length) / Math.log(10);
+      const lengthBonus = Math.min(1.0, Math.log(word.length) / Math.log(10)); // Capped at 1.0
       
       // 3. Frequency significance (not too rare, not too common)
       const freqSignificance = this.calculateFrequencySignificance(freq, totalWords);
