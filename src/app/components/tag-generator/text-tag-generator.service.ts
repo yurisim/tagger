@@ -194,7 +194,7 @@ export class TextTagGeneratorService {
     processedText = processedText.replace(/(['']s|s[''])\b/g, '');
     
     // Replace non-alphanumeric characters with spaces
-    processedText = processedText.replace(/[^\w\s]/g, ' ');
+    processedText = processedText.replace(/[^\w\s-]/g, ' ');
     
     // Normalize whitespace
     processedText = processedText.replace(/\s+/g, ' ').trim();
@@ -632,32 +632,52 @@ export class TextTagGeneratorService {
       return [];
     }
 
+    // Pre-process phrases to include their word arrays and word sets for efficient lookup
+    const phrasesWithDetails = phrases.map(p => {
+      const words = p.tag.split(/\s+/).filter(Boolean); // Split by space and remove empty strings
+      return {
+        original: p, // Keep the original TagResult object
+        score: p.score,
+        words: words,      // Array of words for the current phrase
+        wordSet: new Set(words) // Set of words for efficient checking if it's a potential super phrase
+      };
+    });
+
     const outputPhrases: TagResult[] = [];
 
-    for (let i = 0; i < phrases.length; i++) {
-      const currentPhrase = phrases[i];
-      let isSubsumedByHigherScoringSuperPhrase = false;
+    for (let i = 0; i < phrasesWithDetails.length; i++) {
+      const currentPhraseDetails = phrasesWithDetails[i];
+      let isSubsumed = false;
 
-      for (let j = 0; j < phrases.length; j++) {
+      // An empty tag (no words) should not subsume anything, nor be kept if other tags exist.
+      // However, if it's the only thing, it might be returned. The current logic will remove it if any other higher-scoring tag exists.
+      if (currentPhraseDetails.words.length === 0) {
+        // Optionally, decide to always remove tags that became empty, or handle based on other logic.
+        // For now, it will be processed like any other tag.
+      }
+
+      for (let j = 0; j < phrasesWithDetails.length; j++) {
         if (i === j) {
           continue; // Don't compare a phrase against itself
         }
 
-        const potentialSuperPhrase = phrases[j];
+        const potentialSuperPhraseDetails = phrasesWithDetails[j];
 
-        // Check if currentPhrase.tag is a sub-phrase of (or identical to) potentialSuperPhrase.tag
-        // AND potentialSuperPhrase has a strictly higher score.
+        // Check if currentPhraseDetails is "word-subsumed" by potentialSuperPhraseDetails:
+        // 1. potentialSuperPhrase must have a strictly higher score.
+        // 2. All words in currentPhrase must be present in potentialSuperPhrase.
         if (
-          potentialSuperPhrase.tag.includes(currentPhrase.tag) &&
-          potentialSuperPhrase.score > currentPhrase.score
+          potentialSuperPhraseDetails.score > currentPhraseDetails.score &&
+          currentPhraseDetails.words.length > 0 && // Ensure current phrase is not empty
+          currentPhraseDetails.words.every(word => potentialSuperPhraseDetails.wordSet.has(word))
         ) {
-          isSubsumedByHigherScoringSuperPhrase = true;
-          break; // Found a reason to remove currentPhrase
+          isSubsumed = true;
+          break; // Found a reason to remove currentPhraseDetails
         }
       }
 
-      if (!isSubsumedByHigherScoringSuperPhrase) {
-        outputPhrases.push(currentPhrase);
+      if (!isSubsumed) {
+        outputPhrases.push(currentPhraseDetails.original); // Add the original TagResult object
       }
     }
     return outputPhrases;
